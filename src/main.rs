@@ -1,9 +1,9 @@
-#![feature(range_contains)]
+#![feature(duration_as_u128)]
 
 extern crate image;
 extern crate log;
 extern crate nalgebra as na;
-// extern crate ncollide3d as nc;
+extern crate ncollide3d as nc;
 extern crate palette;
 extern crate pretty_env_logger;
 extern crate rand;
@@ -15,109 +15,24 @@ const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 fn main() -> Result<(), failure::Error> {
     pretty_env_logger::init();
-
-    let width = 1000;
-    let height = 500;
-    let samples = 50;
-
     info!("version: {}", VERSION);
 
-    let look_from = vec3(-2.0, 2.0, 1.0);
-    let look_at = vec3(0.0, 0.0, -1.0);
-    let camera = Camera::new(
-        &look_from,
-        &look_at,
-        &vec3(0.0, 1.0, 0.0),
-        50.0,
-        width as f32 / height as f32,
-        0.0,
-        (look_from - look_at).magnitude(),
-        0.0,
-        0.1,
-    );
-    let world: Vec<Box<Hitable>> = vec![
-        Box::new(Sphere {
-            center: vec3(0.0, 0.0, -1.0),
-            radius: 0.25,
-            material: Material::Dielectric { refraction: 4.0 },
-            linear_velocity: Vec3::zeros(),
-        }),
-        Box::new(Sphere {
-            center: vec3(1.0, 0.0, -1.0),
-            radius: 0.5,
-            material: Material::Metal {
-                albedo: palette::Srgb::new(0.8, 0.6, 0.2).into_linear(),
-                fuzz: 0.0,
-            },
-            linear_velocity: Vec3::zeros(),
-        }),
-        Box::new(Sphere {
-            center: vec3(-1.0, 0.0, -1.0),
-            radius: 0.5,
-            material: Material::Metal {
-                albedo: palette::Srgb::new(0.6, 0.6, 0.6).into_linear(),
-                fuzz: 1.0,
-            },
-            linear_velocity: Vec3::zeros(),
-        }),
-        Box::new(Sphere {
-            center: vec3(0.0, 0.0, -4.0),
-            radius: 1.0,
-            material: Material::Lambertian {
-                albedo: palette::Srgb::new(0.1, 0.2, 0.5).into_linear(),
-            },
-            linear_velocity: vec3(0.0, 0.5, 0.0),
-        }),
-        Box::new(Sphere {
-            center: vec3(0.0, -100.5, -1.0),
-            radius: 100.0,
-            material: Material::Lambertian {
-                albedo: palette::Srgb::new(0.8, 0.8, 0.0).into_linear(),
-            },
-            linear_velocity: Vec3::zeros(),
-        }),
-    ];
+    info!("creating scene");
+    let scene = Scene::default();
 
-    let before_render = std::time::Instant::now();
+    info!("grabbing camera");
+    let camera = Camera::default();
 
-    info!(
-        "rendering an image of dimensions {} by {} pixels with {}x sampling",
-        width, height, samples
-    );
-    let buf = image::RgbImage::from_fn(width, height, |x, y| {
-        use std::ops::Div;
+    info!("checking it");
+    camera.bench(&scene, 10000);
 
-        if x == 0 {
-            info!(
-                "{:5.1}% complete after {:?}",
-                100.0 * y as f32 / height as f32,
-                before_render.elapsed()
-            );
-        }
+    info!("capturing");
+    let picture = camera.capture(&scene);
 
-        let srgb: palette::Srgb<u8> = palette::Srgb::from_linear(
-            (0..samples)
-                .fold(palette::Srgb::new(0.0, 0.0, 0.0).into_linear(), |acc, _| {
-                    let u = (rand::random::<f32>() + x as f32) / width as f32;
-                    let v = (rand::random::<f32>() + y as f32) / height as f32;
-                    acc + color(&world, &camera.ray(u, v), 0)
-                })
-                .div(samples as f32),
-        )
-        .into_format();
+    info!("saving");
+    picture.save("out.png")?;
 
-        use palette::Pixel;
-        image::Rgb {
-            data: *srgb.as_raw(),
-        }
-    });
-
-    info!("render complete, run time: {:?}", before_render.elapsed());
-
-    info!("writing to out.png");
-    buf.save("out.png")?;
-
-    info!("displaying result");
+    info!("viewing result");
     std::process::Command::new("feh")
         .args(&["-F", "out.png"])
         .status()?;
@@ -126,296 +41,461 @@ fn main() -> Result<(), failure::Error> {
     Ok(())
 }
 
-fn color(world: &Vec<Box<Hitable>>, ray: &Ray, depth: u32) -> palette::LinSrgb {
-    match world.hit(&ray, 0.001, std::f32::INFINITY) {
-        Some(hit) => {
-            if depth > 50 {
-                return palette::LinSrgb::default();
-            }
-            match hit.material.scatter(&ray, &hit) {
-                Some((scattered, attenuation)) => {
-                    return attenuation * color(&world, &scattered, depth + 1);
-                }
-                _ => {
-                    return palette::LinSrgb::default();
-                }
-            }
-        }
-        _ => (),
-    }
+type AABB = nc::bounding_volume::AABB<Scalar>;
+type BVT = nc::partitioning::BVT<Object, AABB>;
+type Isometry = na::Isometry3<Scalar>;
+type Point = na::Point3<Scalar>;
+type Ray = nc::query::Ray<Scalar>;
+type Scalar = f32;
+type RayIntersection = nc::query::RayIntersection<Scalar>;
+type Vector = na::Vector3<Scalar>;
+use palette::LinSrgb;
 
-    use palette::Mix;
-    let t = 0.5 * (ray.direction.normalize().y + 1.0);
-    palette::Srgb::new(1.0, 1.0, 1.0)
-        .into_linear()
-        .mix(&palette::Srgb::new(0.5, 0.7, 1.0).into_linear(), t)
-}
-
-// RAY
-
-struct Ray {
-    origin: Vec3,
-    direction: Vec3,
-    time: f32,
-}
-
-impl Ray {
-    fn point_at_parameter(&self, t: f32) -> Vec3 {
-        self.origin + t * self.direction
-    }
-}
-
-// HIT
-
-struct Hit {
-    t: f32,
-    point: Vec3,
-    normal: Vec3,
-    material: Material,
-}
-
-trait Hitable {
-    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<Hit>;
-}
-
-impl Hitable for Vec<Box<Hitable>> {
-    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<Hit> {
-        trace!("ray traversing world");
-        let mut result = None;
-        let mut closest_so_far = t_max;
-        for hitable in self {
-            match hitable.hit(ray, t_min, closest_so_far) {
-                Some(hit) => {
-                    closest_so_far = hit.t;
-                    result = Some(hit);
-                }
-                _ => {}
-            }
-        }
-        result
-    }
-}
-
-// SPHERE
-
-struct Sphere {
-    center: Vec3,
-    radius: f32,
-    material: Material,
-    linear_velocity: Vec3,
-}
-
-impl Sphere {
-    fn center_at(&self, time: f32) -> Vec3 {
-        self.center + self.linear_velocity * time
-    }
-}
-
-impl Hitable for Sphere {
-    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<Hit> {
-        let oc = ray.origin - self.center_at(ray.time);
-        let a = ray.direction.dot(&ray.direction);
-        let b = oc.dot(&ray.direction);
-        let c = oc.dot(&oc) - self.radius * self.radius;
-        let discriminant = b * b - a * c;
-
-        if discriminant > 0.0 {
-            let t = (-b - discriminant.sqrt()) / a;
-            if (t_min..t_max).contains(&t) {
-                let point = ray.point_at_parameter(t);
-                return Some(Hit {
-                    t: t,
-                    point: point,
-                    normal: (point - self.center) / self.radius,
-                    material: self.material,
-                });
-            }
-
-            let t = (-b + discriminant.sqrt()) / a;
-            if (t_min..t_max).contains(&t) {
-                let point = ray.point_at_parameter(t);
-                return Some(Hit {
-                    t: t,
-                    point: point,
-                    normal: (point - self.center) / self.radius,
-                    material: self.material,
-                });
-            }
-        }
-        None
-    }
-}
-
-// CAMERA
-
+#[derive(Debug)]
 struct Camera {
-    top_left_corner: Vec3,
-    horizontal: Vec3,
-    vertical: Vec3,
-    origin: Vec3,
-    u: Vec3,
-    v: Vec3,
-    lens_radius: f32,
-    t0: f32,
-    t1: f32,
+    origin: Point,
+    top_left_corner: Point,
+    horizontal: Vector,
+    vertical: Vector,
+    u: Vector,
+    v: Vector,
+
+    lens_radius: Scalar,
+    shutter_speed: Scalar,
+
+    resolution: na::Vector2<u32>,
+    samples: u32,
+}
+
+impl Default for Camera {
+    fn default() -> Self {
+        Self::new(
+            &Point::origin(),
+            &Point::new(0.0, 0.0, -1.0),
+            &Vector::y().into(),
+            90.0,
+            0.0,
+            None,
+            1.0 / 500.0,
+            na::Vector2::new(1000, 1000),
+            200,
+        )
+    }
 }
 
 impl Camera {
     fn new(
-        from: &Vec3,
-        at: &Vec3,
-        up: &Vec3,
-        vfov: f32,
-        aspect: f32,
-        aperture: f32,
-        focus_dist: f32,
-        t0: f32,
-        t1: f32,
+        from: &Point,
+        at: &Point,
+        up: &Vector,
+        vfov: Scalar,
+        aperture: Scalar,
+        focus_dist: Option<Scalar>,
+        shutter_speed: Scalar,
+        resolution: na::Vector2<u32>,
+        samples: u32,
     ) -> Self {
         let theta = vfov.to_radians();
         let half_height = (theta / 2.0).tan();
-        let half_width = aspect * half_height;
+        let half_width = (resolution.x as f32 / resolution.y as f32) * half_height;
         let w = (from - at).normalize();
         let u = up.cross(&w).normalize();
         let v = w.cross(&u);
+        let focus_dist = focus_dist.unwrap_or((at - from).magnitude());
         Self {
+            origin: *from,
             top_left_corner: from - half_width * focus_dist * u + half_height * focus_dist * v
                 - focus_dist * w,
             horizontal: 2.0 * half_width * focus_dist * u,
             vertical: 2.0 * half_height * focus_dist * v,
-            origin: *from,
             u: u,
             v: v,
             lens_radius: aperture / 2.0,
-            t0: t0,
-            t1: t1,
+            shutter_speed: shutter_speed,
+            resolution: resolution,
+            samples: samples,
+        }
+    }
+
+    fn bench(&self, scene: &Scene, pixels: u32) {
+        use rand::Rng;
+
+        debug!("benchmarking {:?} random pixels", pixels);
+
+        let before_render = std::time::Instant::now();
+        let mut rng = rand::thread_rng();
+        let mut img = image::RgbImage::new(1, 1);
+
+        for _ in 0..pixels {
+            let color = self.capture_pixel(
+                scene,
+                rng.gen_range(0, self.resolution.x),
+                rng.gen_range(0, self.resolution.y),
+            );
+            img.put_pixel(0, 0, color);
+        }
+
+        debug!(
+            "results: {:?} ({:?} p/s)",
+            before_render.elapsed(),
+            pixels as f32 / (before_render.elapsed().as_nanos() as f32 / 1_000_000_000.0)
+        );
+        debug!(
+            "estimating for full render: {:?}",
+            (before_render.elapsed() / pixels) * self.resolution.x * self.resolution.y
+        );
+    }
+
+    fn capture(&self, scene: &Scene) -> image::RgbImage {
+        // TODO: parallelism
+        // TODO: generate chunks and stitch chunks
+        // (I assume this helps data locality? generating a
+        // big image with low sample amount is much slower than
+        // generating a small image with large sample amount)
+        let before_render = std::time::Instant::now();
+        let mut last_print = std::time::Instant::now();
+        let second = std::time::Duration::from_secs(1);
+        let total_pixels = self.resolution.x * self.resolution.y;
+
+        let ret = image::RgbImage::from_fn(self.resolution.x, self.resolution.y, |x, y| {
+            if last_print.elapsed() > second {
+                let pixels = y * self.resolution.x + x;
+                debug!(
+                    "progress: {:5.1}% in {:-3.1?}",
+                    100.0 * pixels as f32 / total_pixels as f32,
+                    elapsed = before_render.elapsed(),
+                );
+                last_print = std::time::Instant::now();
+            }
+            self.capture_pixel(scene, x, y)
+        });
+        debug!(
+            "total render: {:?} ({:?} p/s)",
+            before_render.elapsed(),
+            total_pixels as f32 / (before_render.elapsed().as_nanos() as f32 / 1_000_000_000.0)
+        );
+        ret
+    }
+
+    fn capture_pixel(&self, scene: &Scene, x: u32, y: u32) -> image::Rgb<u8> {
+        // TODO: shutter speed / motion blur
+        // TODO: extract sample distribution ?
+
+        let color = (0..self.samples).fold(LinSrgb::default(), |color, _| {
+            let u = (rand::random::<f32>() + x as f32) / self.resolution.x as f32;
+            let v = (rand::random::<f32>() + y as f32) / self.resolution.y as f32;
+            color + scene.trace(&self.ray(u, v), 0)
+        }) / self.samples as f32;
+
+        let srgb: palette::Srgb<u8> = palette::Srgb::from_linear(color).into_format();
+
+        use palette::Pixel;
+        image::Rgb {
+            data: *srgb.as_raw(),
         }
     }
 
     fn ray(&self, u: f32, v: f32) -> Ray {
-        use rand::Rng;
-
         let rd = self.lens_radius * rand_in_disk();
         let offset = self.u * rd.x + self.v * rd.y;
+
         Ray {
             origin: self.origin + offset,
-            direction: self.top_left_corner + u * self.horizontal
+            dir: self.top_left_corner + u * self.horizontal
                 - v * self.vertical
                 - self.origin
                 - offset,
-            time: rand::thread_rng().gen_range(self.t0, self.t1),
         }
     }
 }
-// MATERIAL
 
-#[derive(Clone, Copy)]
-enum Material {
-    Lambertian { albedo: palette::LinSrgb },
-    Metal { albedo: palette::LinSrgb, fuzz: f32 },
-    Dielectric { refraction: f32 },
+struct Scene {
+    objects: BVT,
+    background: palette::gradient::Gradient<LinSrgb>,
+    max_depth: u32,
 }
 
-impl Material {
-    fn scatter(&self, ray: &Ray, hit: &Hit) -> Option<(Ray, palette::LinSrgb)> {
-        match self {
-            &Material::Lambertian { albedo } => {
-                let target = hit.point + hit.normal + rand_in_sphere();
+impl Scene {
+    fn trace(&self, ray: &Ray, depth: u32) -> LinSrgb {
+        match self
+            .objects
+            .best_first_search(&mut (CostByRayCast { ray: &ray }))
+        {
+            None => self.background.get((ray.dir.normalize().y + 1.0) / 2.0),
+            Some((object, intersection)) => {
+                let emitted = object
+                    .material
+                    .emitted_using_intersection(&ray, &intersection);
 
-                Some((
-                    Ray {
-                        origin: hit.point,
-                        direction: target - hit.point,
-                        time: ray.time,
-                    },
-                    albedo,
-                ))
-            }
-            &Material::Metal { albedo, fuzz } => {
-                let reflected = reflect(ray.direction.normalize(), hit.normal);
-
-                if reflected.dot(&hit.normal) <= 0.0 {
-                    return None;
+                if depth > self.max_depth {
+                    return emitted;
                 }
-
-                Some((
-                    Ray {
-                        origin: hit.point,
-                        direction: reflected + fuzz * rand_in_sphere(),
-                        time: ray.time,
-                    },
-                    albedo,
-                ))
-            }
-            &Material::Dielectric { refraction } => {
-                let attenuation = palette::Srgb::new(1.0, 1.0, 1.0).into_linear();
-                let rdotn = ray.direction.dot(&hit.normal);
-                let (outward_normal, ni_over_nt, cosine) = if rdotn > 0.0 {
-                    let cosine = rdotn / ray.direction.magnitude();
-                    let cosine = (1.0 - refraction * refraction * (1.0 - cosine * cosine)).sqrt();
-                    (-hit.normal, refraction, cosine)
+                if let Some((scattered, attenuation)) = object.material.scatter(&ray, &intersection)
+                {
+                    attenuation * self.trace(&scattered, depth + 1)
                 } else {
-                    let cosine = -rdotn / ray.direction.magnitude();
-                    (hit.normal, 1.0 / refraction, cosine)
-                };
-                if let Some(refracted) = refract(&ray.direction, &outward_normal, ni_over_nt) {
-                    let reflect_prob = schlick(cosine, refraction);
-                    if rand::random::<f32>() > reflect_prob {
-                        return Some((
-                            Ray {
-                                origin: hit.point,
-                                direction: refracted,
-                                time: ray.time,
-                            },
-                            attenuation,
-                        ));
-                    }
+                    emitted
                 }
-                Some((
-                    Ray {
-                        origin: hit.point,
-                        direction: reflect(ray.direction, hit.normal),
-                        time: ray.time,
-                    },
-                    attenuation,
-                ))
             }
         }
+    }
+
+    fn new(objects: Vec<(Object, AABB)>) -> Scene {
+        Scene {
+            objects: BVT::new_balanced(objects),
+            background: palette::gradient::Gradient::new(vec![
+                LinSrgb::new(0.4, 0.5, 1.0),
+                LinSrgb::new(1.0, 1.0, 1.0),
+                LinSrgb::new(0.4, 0.5, 1.0),
+            ]),
+            max_depth: 10,
+        }
+    }
+}
+
+impl Default for Scene {
+    fn default() -> Self {
+        use ncollide3d::bounding_volume::HasBoundingVolume;
+
+        let transform = Isometry::new(Vector::new(1.0, 0.0, -1.0), Vector::zeros());
+        let transform2 = Isometry::new(Vector::new(-1.0, 0.0, -1.0), Vector::zeros());
+        let transform3 = Isometry::new(Vector::new(0.0, -100.5, 0.0), Vector::zeros());
+
+        Self::new(vec![
+            (
+                Object {
+                    material: Box::new(Metal {
+                        albedo: Box::new(Checkerboard {
+                            odd: Box::new(LinSrgb::new(1.0, 1.0, 1.0)),
+                            even: Box::new(LinSrgb::new(0.0, 0.0, 0.0)),
+                            size: 10.0,
+                        }),
+                        fuzz: 0.2,
+                    }),
+                    shape: Box::new(nc::shape::Ball::new(0.5)),
+                    transform: transform,
+                },
+                nc::shape::Ball::new(0.5).bounding_volume(&transform),
+            ),
+            (
+                Object {
+                    material: Box::new(Metal {
+                        albedo: Box::new(LinSrgb::new(0.3, 0.5, 0.8)),
+                        fuzz: 0.0,
+                    }),
+                    shape: Box::new(nc::shape::Ball::new(0.5)),
+                    transform: transform2,
+                },
+                nc::shape::Ball::new(0.5).bounding_volume(&transform2),
+            ),
+            (
+                Object {
+                    material: Box::new(DiffuseLight {
+                        value: Box::new(LinSrgb::new(0.5, 0.5, 0.5)),
+                    }),
+                    shape: Box::new(nc::shape::Ball::new(100.0)),
+                    transform: transform3,
+                },
+                nc::shape::Ball::new(100.0).bounding_volume(&transform3),
+            ),
+        ])
+    }
+}
+
+struct CostByRayCast<'a> {
+    ray: &'a Ray,
+}
+
+impl<'a> nc::partitioning::BVTCostFn<Scalar, Object, AABB> for CostByRayCast<'a> {
+    type UserData = RayIntersection;
+
+    fn compute_bv_cost(&mut self, bv: &AABB) -> Option<Scalar> {
+        use ncollide3d::query::RayCast;
+
+        bv.toi_with_ray(&Isometry::identity(), self.ray, true)
+    }
+
+    fn compute_b_cost(&mut self, b: &Object) -> Option<(Scalar, Self::UserData)> {
+        b.shape
+            .toi_and_normal_and_uv_with_ray(&b.transform, self.ray, true)
+            .map(|i| (i.toi, i))
+    }
+}
+
+struct Object {
+    material: Box<Material>,
+    shape: Box<nc::query::RayCast<Scalar>>,
+    transform: Isometry,
+}
+
+trait Material {
+    fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, LinSrgb)>;
+    fn emitted(&self, _: Scalar, _: Scalar, _: Point) -> LinSrgb {
+        Default::default()
+    }
+
+    fn emitted_using_intersection(&self, ray: &Ray, intersection: &RayIntersection) -> LinSrgb {
+        if let Some(uvs) = intersection.uvs {
+            self.emitted(uvs.x, uvs.y, intersection.point(&ray))
+        } else {
+            Default::default()
+        }
+    }
+}
+
+struct Lambertian {
+    albedo: Box<Texture>,
+}
+
+impl Material for Lambertian {
+    fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, LinSrgb)> {
+        let target = intersection.point(&ray) + intersection.normal + rand_in_sphere();
+
+        Some((
+            Ray {
+                origin: intersection.point(&ray),
+                dir: target - intersection.point(&ray),
+            },
+            self.albedo.sample(0.0, 0.0, intersection.point(&ray)),
+        ))
+    }
+}
+
+struct Metal {
+    albedo: Box<Texture>,
+    fuzz: Scalar,
+}
+
+impl Material for Metal {
+    fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, LinSrgb)> {
+        let reflected = reflect(&ray.dir.normalize(), &intersection.normal);
+
+        if reflected.dot(&intersection.normal) <= 0.0 {
+            return None;
+        }
+
+        Some((
+            Ray {
+                origin: intersection.point(&ray),
+                dir: reflected + self.fuzz * rand_in_sphere(),
+            },
+            self.albedo.sample(0.0, 0.0, intersection.point(&ray)),
+        ))
+    }
+}
+
+struct Dielectric {
+    refraction: Scalar,
+}
+
+impl Material for Dielectric {
+    fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, LinSrgb)> {
+        let attenuation = LinSrgb::new(1.0, 1.0, 1.0);
+        let rdotn = ray.dir.dot(&intersection.normal);
+        let (outward_normal, ni_over_nt, cosine) = if rdotn > 0.0 {
+            let cosine = rdotn / ray.dir.magnitude();
+            let cosine = (1.0 - self.refraction * self.refraction * (1.0 - cosine * cosine)).sqrt();
+            (-intersection.normal, self.refraction, cosine)
+        } else {
+            let cosine = -rdotn / ray.dir.magnitude();
+            (intersection.normal, 1.0 / self.refraction, cosine)
+        };
+        if let Some(refracted) = refract(&ray.dir, &outward_normal, ni_over_nt) {
+            let reflect_prob = schlick(cosine, self.refraction);
+            if rand::random::<f32>() > reflect_prob {
+                return Some((
+                    Ray {
+                        origin: intersection.point(&ray),
+                        dir: refracted,
+                    },
+                    attenuation,
+                ));
+            }
+        }
+        Some((
+            Ray {
+                origin: intersection.point(&ray),
+                dir: reflect(&ray.dir, &intersection.normal),
+            },
+            attenuation,
+        ))
+    }
+}
+
+struct DiffuseLight {
+    value: Box<Texture>,
+}
+
+impl Material for DiffuseLight {
+    fn scatter(&self, _: &Ray, _: &RayIntersection) -> Option<(Ray, LinSrgb)> {
+        None
+    }
+
+    fn emitted(&self, u: Scalar, v: Scalar, p: Point) -> LinSrgb {
+        self.value.sample(u, v, p)
+    }
+}
+
+trait Texture {
+    fn sample(&self, u: Scalar, v: Scalar, p: Point) -> LinSrgb;
+}
+
+impl Texture for LinSrgb {
+    fn sample(&self, _: Scalar, _: Scalar, _: Point) -> LinSrgb {
+        *self
+    }
+}
+
+struct Checkerboard {
+    even: Box<Texture>,
+    odd: Box<Texture>,
+    size: Scalar,
+}
+
+impl Texture for Checkerboard {
+    fn sample(&self, u: Scalar, v: Scalar, p: Point) -> LinSrgb {
+        let p = p * self.size;
+        if p.x.sin() * p.y.sin() * p.z.sin() < 0.0 {
+            self.odd.sample(u, v, p)
+        } else {
+            self.even.sample(u, v, p)
+        }
+    }
+}
+
+struct UVTexture;
+
+impl Texture for UVTexture {
+    fn sample(&self, u: Scalar, v: Scalar, p: Point) -> LinSrgb {
+        LinSrgb::new(u, v, 0.0)
+    }
+}
+
+struct PointTexture;
+
+impl Texture for PointTexture {
+    fn sample(&self, u: Scalar, v: Scalar, p: Point) -> LinSrgb {
+        LinSrgb::new(p.x, p.y, p.z)
     }
 }
 
 // UTILS
 
-type Vec3 = na::Vector3<f32>;
+fn rand_in_disk() -> Point {
+    let theta: Scalar = 2.0 * std::f32::consts::PI * rand::random::<Scalar>();
 
-fn vec3(x: f32, y: f32, z: f32) -> Vec3 {
-    Vec3::new(x, y, z)
+    Point::new(theta.cos(), theta.sin(), 0.0)
 }
 
-fn rand_in_disk() -> Vec3 {
-    loop {
-        let point = 2.0 * vec3(rand::random(), rand::random(), 0.0) - vec3(1.0, 1.0, 0.0);
-        if point.dot(&point) < 1.0 {
-            return point;
-        }
-    }
+fn rand_in_sphere() -> Vector {
+    rand::random::<Vector>().normalize() * rand::random::<Scalar>().cbrt()
 }
 
-fn rand_in_sphere() -> Vec3 {
-    loop {
-        let point =
-            2.0 * vec3(rand::random(), rand::random(), rand::random()) - vec3(1.0, 1.0, 1.0);
-        if point.magnitude_squared() < 1.0 {
-            return point;
-        }
-    }
-}
-
-fn reflect(v: Vec3, n: Vec3) -> Vec3 {
+fn reflect(v: &Vector, n: &Vector) -> Vector {
     v - 2.0 * v.dot(&n) * n
 }
 
-fn refract(v: &Vec3, n: &Vec3, ni_over_nt: f32) -> Option<Vec3> {
+fn refract(v: &Vector, n: &Vector, ni_over_nt: Scalar) -> Option<Vector> {
     let uv = v.normalize();
     let dt = uv.dot(&n);
     let discriminant = 1.0 - ni_over_nt * ni_over_nt * (1.0 - dt * dt);
@@ -426,8 +506,18 @@ fn refract(v: &Vec3, n: &Vec3, ni_over_nt: f32) -> Option<Vec3> {
     }
 }
 
-fn schlick(cosine: f32, refraction: f32) -> f32 {
+fn schlick(cosine: Scalar, refraction: Scalar) -> Scalar {
     let r0 = (1.0 - refraction) / (1.0 + refraction);
     let r0 = r0 * r0;
     r0 + (1.0 - r0) * (1.0 - cosine).powf(5.0)
+}
+
+trait IntersectionPoint {
+    fn point(&self, ray: &Ray) -> Point;
+}
+
+impl IntersectionPoint for RayIntersection {
+    fn point(&self, ray: &Ray) -> Point {
+        ray.origin + ray.dir * self.toi
+    }
 }
