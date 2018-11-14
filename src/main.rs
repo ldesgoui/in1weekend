@@ -3,6 +3,8 @@
 extern crate image;
 extern crate log;
 extern crate nalgebra as na;
+// extern crate ncollide3d as nc;
+extern crate palette;
 extern crate pretty_env_logger;
 extern crate rand;
 
@@ -44,7 +46,7 @@ fn main() -> Result<(), failure::Error> {
             center: vec3(1.0, 0.0, -1.0),
             radius: 0.5,
             material: Material::Metal {
-                albedo: vec3(0.8, 0.6, 0.2),
+                albedo: palette::Srgb::new(0.8, 0.6, 0.2).into_linear(),
                 fuzz: 0.0,
             },
             linear_velocity: Vec3::zeros(),
@@ -53,7 +55,7 @@ fn main() -> Result<(), failure::Error> {
             center: vec3(-1.0, 0.0, -1.0),
             radius: 0.5,
             material: Material::Metal {
-                albedo: vec3(0.6, 0.6, 0.6),
+                albedo: palette::Srgb::new(0.6, 0.6, 0.6).into_linear(),
                 fuzz: 1.0,
             },
             linear_velocity: Vec3::zeros(),
@@ -62,7 +64,7 @@ fn main() -> Result<(), failure::Error> {
             center: vec3(0.0, 0.0, -4.0),
             radius: 1.0,
             material: Material::Lambertian {
-                albedo: vec3(0.1, 0.2, 0.5),
+                albedo: palette::Srgb::new(0.1, 0.2, 0.5).into_linear(),
             },
             linear_velocity: vec3(0.0, 0.5, 0.0),
         }),
@@ -70,7 +72,7 @@ fn main() -> Result<(), failure::Error> {
             center: vec3(0.0, -100.5, -1.0),
             radius: 100.0,
             material: Material::Lambertian {
-                albedo: vec3(0.8, 0.8, 0.0),
+                albedo: palette::Srgb::new(0.8, 0.8, 0.0).into_linear(),
             },
             linear_velocity: Vec3::zeros(),
         }),
@@ -86,18 +88,28 @@ fn main() -> Result<(), failure::Error> {
         use std::ops::Div;
 
         if x == 0 {
-            info!("{:5.1}% complete", 100.0 * y as f32 / height as f32);
+            info!(
+                "{:5.1}% complete after {:?}",
+                100.0 * y as f32 / height as f32,
+                before_render.elapsed()
+            );
         }
 
-        (0..samples)
-            .fold(vec3(0.0, 0.0, 0.0), |acc, _| {
-                let u = (rand::random::<f32>() + x as f32) / width as f32;
-                let v = (rand::random::<f32>() + y as f32) / height as f32;
-                acc + color(&world, &camera.ray(u, v), 0)
-            })
-            .div(samples as f32)
-            .map(f32::sqrt)
-            .to_rgb()
+        let srgb: palette::Srgb<u8> = palette::Srgb::from_linear(
+            (0..samples)
+                .fold(palette::Srgb::new(0.0, 0.0, 0.0).into_linear(), |acc, _| {
+                    let u = (rand::random::<f32>() + x as f32) / width as f32;
+                    let v = (rand::random::<f32>() + y as f32) / height as f32;
+                    acc + color(&world, &camera.ray(u, v), 0)
+                })
+                .div(samples as f32),
+        )
+        .into_format();
+
+        use palette::Pixel;
+        image::Rgb {
+            data: *srgb.as_raw(),
+        }
     });
 
     info!("render complete, run time: {:?}", before_render.elapsed());
@@ -114,32 +126,29 @@ fn main() -> Result<(), failure::Error> {
     Ok(())
 }
 
-fn color(world: &Vec<Box<Hitable>>, ray: &Ray, depth: u32) -> Vec3 {
+fn color(world: &Vec<Box<Hitable>>, ray: &Ray, depth: u32) -> palette::LinSrgb {
     match world.hit(&ray, 0.001, std::f32::INFINITY) {
         Some(hit) => {
             if depth > 50 {
-                return Vec3::zeros();
+                return palette::LinSrgb::default();
             }
             match hit.material.scatter(&ray, &hit) {
                 Some((scattered, attenuation)) => {
-                    let rec = color(&world, &scattered, depth + 1);
-
-                    return vec3(
-                        attenuation.x * rec.x,
-                        attenuation.y * rec.y,
-                        attenuation.z * rec.z,
-                    );
+                    return attenuation * color(&world, &scattered, depth + 1);
                 }
                 _ => {
-                    return Vec3::zeros();
+                    return palette::LinSrgb::default();
                 }
             }
         }
         _ => (),
     }
 
+    use palette::Mix;
     let t = 0.5 * (ray.direction.normalize().y + 1.0);
-    vec3(1.0, 1.0, 1.0).lerp(&vec3(0.5, 0.7, 1.0), t)
+    palette::Srgb::new(1.0, 1.0, 1.0)
+        .into_linear()
+        .mix(&palette::Srgb::new(0.5, 0.7, 1.0).into_linear(), t)
 }
 
 // RAY
@@ -302,13 +311,13 @@ impl Camera {
 
 #[derive(Clone, Copy)]
 enum Material {
-    Lambertian { albedo: Vec3 },
-    Metal { albedo: Vec3, fuzz: f32 },
+    Lambertian { albedo: palette::LinSrgb },
+    Metal { albedo: palette::LinSrgb, fuzz: f32 },
     Dielectric { refraction: f32 },
 }
 
 impl Material {
-    fn scatter(&self, ray: &Ray, hit: &Hit) -> Option<(Ray, Vec3)> {
+    fn scatter(&self, ray: &Ray, hit: &Hit) -> Option<(Ray, palette::LinSrgb)> {
         match self {
             &Material::Lambertian { albedo } => {
                 let target = hit.point + hit.normal + rand_in_sphere();
@@ -339,7 +348,7 @@ impl Material {
                 ))
             }
             &Material::Dielectric { refraction } => {
-                let attenuation = vec3(1.0, 1.0, 1.0);
+                let attenuation = palette::Srgb::new(1.0, 1.0, 1.0).into_linear();
                 let rdotn = ray.direction.dot(&hit.normal);
                 let (outward_normal, ni_over_nt, cosine) = if rdotn > 0.0 {
                     let cosine = rdotn / ray.direction.magnitude();
@@ -383,17 +392,6 @@ fn vec3(x: f32, y: f32, z: f32) -> Vec3 {
     Vec3::new(x, y, z)
 }
 
-trait ToRgb<T: image::Primitive> {
-    fn to_rgb(&self) -> image::Rgb<T>;
-}
-
-impl ToRgb<u8> for Vec3 {
-    fn to_rgb(&self) -> image::Rgb<u8> {
-        let scaled = self * u8::max_value() as f32;
-        image::Rgb([scaled.x as u8, scaled.y as u8, scaled.z as u8])
-    }
-}
-
 fn rand_in_disk() -> Vec3 {
     loop {
         let point = 2.0 * vec3(rand::random(), rand::random(), 0.0) - vec3(1.0, 1.0, 0.0);
@@ -432,20 +430,4 @@ fn schlick(cosine: f32, refraction: f32) -> f32 {
     let r0 = (1.0 - refraction) / (1.0 + refraction);
     let r0 = r0 * r0;
     r0 + (1.0 - r0) * (1.0 - cosine).powf(5.0)
-}
-
-fn min<A: PartialOrd>(lhs: A, rhs: A) -> A {
-    if lhs.le(&rhs) {
-        lhs
-    } else {
-        rhs
-    }
-}
-
-fn max<A: PartialOrd>(lhs: A, rhs: A) -> A {
-    if lhs.ge(&rhs) {
-        lhs
-    } else {
-        rhs
-    }
 }
