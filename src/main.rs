@@ -50,6 +50,7 @@ type Scalar = f32;
 type RayIntersection = nc::query::RayIntersection<Scalar>;
 type Vector = na::Vector3<Scalar>;
 use palette::LinSrgb;
+type RayCast = nc::query::RayCast<Scalar>;
 
 #[derive(Debug)]
 struct Camera {
@@ -78,7 +79,7 @@ impl Default for Camera {
             None,
             1.0 / 500.0,
             na::Vector2::new(1000, 1000),
-            200,
+            20,
         )
     }
 }
@@ -258,19 +259,20 @@ impl Default for Scene {
         use ncollide3d::bounding_volume::HasBoundingVolume;
 
         let transform = Isometry::new(Vector::new(1.0, 0.0, -1.0), Vector::zeros());
+        let transform1 = Isometry::new(Vector::new(0.0, 0.0, -1.0), Vector::zeros());
         let transform2 = Isometry::new(Vector::new(-1.0, 0.0, -1.0), Vector::zeros());
         let transform3 = Isometry::new(Vector::new(0.0, -100.5, 0.0), Vector::zeros());
+        let transform4 = Isometry::new(Vector::new(0.0, -0.5, -1.0), Vector::zeros());
 
         Self::new(vec![
             (
                 Object {
-                    material: Box::new(Metal {
+                    material: Box::new(Lambertian {
                         albedo: Box::new(Checkerboard {
-                            odd: Box::new(LinSrgb::new(1.0, 1.0, 1.0)),
-                            even: Box::new(LinSrgb::new(0.0, 0.0, 0.0)),
+                            odd: Box::new(UVTexture),
+                            even: Box::new(PointTexture),
                             size: 10.0,
                         }),
-                        fuzz: 0.2,
                     }),
                     shape: Box::new(nc::shape::Ball::new(0.5)),
                     transform: transform,
@@ -279,24 +281,48 @@ impl Default for Scene {
             ),
             (
                 Object {
-                    material: Box::new(Metal {
-                        albedo: Box::new(LinSrgb::new(0.3, 0.5, 0.8)),
-                        fuzz: 0.0,
-                    }),
+                    material: Box::new(Dielectric { refraction: 5.0 }),
                     shape: Box::new(nc::shape::Ball::new(0.5)),
+                    transform: transform1,
+                },
+                nc::shape::Ball::new(0.5).bounding_volume(&transform1),
+            ),
+            (
+                Object {
+                    material: Box::new(Isotropic {
+                        albedo: Box::new(LinSrgb::new(0.3, 0.5, 0.8)),
+                    }),
+                    shape: Box::new(ConstantMedium {
+                        shape: Box::new(nc::shape::Ball::new(0.5)),
+                    }),
                     transform: transform2,
                 },
                 nc::shape::Ball::new(0.5).bounding_volume(&transform2),
             ),
             (
                 Object {
-                    material: Box::new(DiffuseLight {
-                        value: Box::new(LinSrgb::new(0.5, 0.5, 0.5)),
+                    material: Box::new(Metal {
+                        albedo: Box::new(Checkerboard {
+                            odd: Box::new(LinSrgb::new(0.0, 0.0, 0.0)),
+                            even: Box::new(LinSrgb::new(1.0, 1.0, 1.0)),
+                            size: 10.0,
+                        }),
+                        fuzz: 0.0,
                     }),
                     shape: Box::new(nc::shape::Ball::new(100.0)),
                     transform: transform3,
                 },
                 nc::shape::Ball::new(100.0).bounding_volume(&transform3),
+            ),
+            (
+                Object {
+                    material: Box::new(DiffuseLight {
+                        value: Box::new(LinSrgb::new(5.0, 5.0, 5.0)),
+                    }),
+                    shape: Box::new(nc::shape::Ball::new(0.5)),
+                    transform: transform4,
+                },
+                nc::shape::Ball::new(0.5).bounding_volume(&transform4),
             ),
         ])
     }
@@ -324,8 +350,23 @@ impl<'a> nc::partitioning::BVTCostFn<Scalar, Object, AABB> for CostByRayCast<'a>
 
 struct Object {
     material: Box<Material>,
-    shape: Box<nc::query::RayCast<Scalar>>,
+    shape: Box<RayCast>,
     transform: Isometry,
+}
+
+struct ConstantMedium {
+    shape: Box<RayCast>,
+}
+
+impl nc::query::RayCast<Scalar> for ConstantMedium {
+    fn toi_and_normal_with_ray(
+        &self,
+        m: &Isometry,
+        ray: &Ray,
+        solid: bool,
+    ) -> Option<RayIntersection> {
+        self.shape.toi_and_normal_with_ray(m, ray, solid)
+    }
 }
 
 trait Material {
@@ -436,6 +477,26 @@ impl Material for DiffuseLight {
     }
 }
 
+struct Isotropic {
+    albedo: Box<Texture>,
+}
+
+impl Material for Isotropic {
+    fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, LinSrgb)> {
+        Some((
+            Ray {
+                origin: intersection.point(&ray),
+                dir: rand_in_sphere(),
+            },
+            self.albedo.sample(
+                intersection.uvs?.x,
+                intersection.uvs?.y,
+                intersection.point(&ray),
+            ),
+        ))
+    }
+}
+
 trait Texture {
     fn sample(&self, u: Scalar, v: Scalar, p: Point) -> LinSrgb;
 }
@@ -466,7 +527,7 @@ impl Texture for Checkerboard {
 struct UVTexture;
 
 impl Texture for UVTexture {
-    fn sample(&self, u: Scalar, v: Scalar, p: Point) -> LinSrgb {
+    fn sample(&self, u: Scalar, v: Scalar, _p: Point) -> LinSrgb {
         LinSrgb::new(u, v, 0.0)
     }
 }
@@ -474,7 +535,7 @@ impl Texture for UVTexture {
 struct PointTexture;
 
 impl Texture for PointTexture {
-    fn sample(&self, u: Scalar, v: Scalar, p: Point) -> LinSrgb {
+    fn sample(&self, _u: Scalar, _v: Scalar, p: Point) -> LinSrgb {
         LinSrgb::new(p.x, p.y, p.z)
     }
 }
