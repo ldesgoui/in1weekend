@@ -42,7 +42,7 @@ fn main() -> Result<(), failure::Error> {
 }
 
 type AABB = nc::bounding_volume::AABB<Scalar>;
-type BVT = nc::partitioning::BVT<Object, AABB>;
+type BVT = nc::partitioning::BVT<Box<ObjectTrait>, AABB>;
 type Isometry = na::Isometry3<Scalar>;
 type Point = na::Point3<Scalar>;
 type Ray = nc::query::Ray<Scalar>;
@@ -51,6 +51,40 @@ type RayIntersection = nc::query::RayIntersection<Scalar>;
 type Vector = na::Vector3<Scalar>;
 use palette::LinSrgb;
 type RayCast = nc::query::RayCast<Scalar>;
+
+trait ObjectTrait {
+    fn raycast(&self, ray: &Ray) -> Option<RayIntersection>;
+    fn material_scatter(&self, ray: &Ray, intersection: &RayIntersection)
+        -> Option<(Ray, LinSrgb)>;
+
+    fn material_emitted_using_intersection(
+        &self,
+        ray: &Ray,
+        intersection: &RayIntersection,
+    ) -> LinSrgb;
+}
+impl<M: Material, S: nc::query::RayCast<Scalar>> ObjectTrait for Object<M, S> {
+    fn raycast(&self, ray: &Ray) -> Option<RayIntersection> {
+        self.shape
+            .toi_and_normal_and_uv_with_ray(&self.transform, ray, true)
+    }
+
+    fn material_scatter(
+        &self,
+        ray: &Ray,
+        intersection: &RayIntersection,
+    ) -> Option<(Ray, LinSrgb)> {
+        self.material.scatter(&ray, &intersection)
+    }
+    fn material_emitted_using_intersection(
+        &self,
+        ray: &Ray,
+        intersection: &RayIntersection,
+    ) -> LinSrgb {
+        self.material
+            .emitted_using_intersection(&ray, &intersection)
+    }
+}
 
 #[derive(Debug)]
 struct Camera {
@@ -224,14 +258,12 @@ impl Scene {
         {
             None => self.background.get((ray.dir.normalize().y + 1.0) / 2.0),
             Some((object, intersection)) => {
-                let emitted = object
-                    .material
-                    .emitted_using_intersection(&ray, &intersection);
+                let emitted = object.material_emitted_using_intersection(&ray, &intersection);
 
                 if depth > self.max_depth {
                     return emitted;
                 }
-                if let Some((scattered, attenuation)) = object.material.scatter(&ray, &intersection)
+                if let Some((scattered, attenuation)) = object.material_scatter(&ray, &intersection)
                 {
                     attenuation * self.trace(&scattered, depth + 1)
                 } else {
@@ -241,7 +273,7 @@ impl Scene {
         }
     }
 
-    fn new(objects: Vec<(Object, AABB)>) -> Scene {
+    fn new(objects: Vec<(Box<ObjectTrait>, AABB)>) -> Scene {
         Scene {
             objects: BVT::new_balanced(objects),
             background: palette::gradient::Gradient::new(vec![
@@ -266,62 +298,60 @@ impl Default for Scene {
 
         Self::new(vec![
             (
-                Object {
-                    material: Box::new(Lambertian {
-                        albedo: Box::new(Checkerboard {
-                            odd: Box::new(UVTexture),
-                            even: Box::new(PointTexture),
+                Box::new(Object {
+                    material: Lambertian {
+                        albedo: Checkerboard {
+                            odd: UVTexture,
+                            even: PointTexture,
                             size: 10.0,
-                        }),
-                    }),
-                    shape: Box::new(nc::shape::Ball::new(0.5)),
+                        },
+                    },
+                    shape: nc::shape::Ball::new(0.5),
                     transform: transform,
-                },
+                }),
                 nc::shape::Ball::new(0.5).bounding_volume(&transform),
             ),
             (
-                Object {
-                    material: Box::new(Dielectric { refraction: 5.0 }),
-                    shape: Box::new(nc::shape::Ball::new(0.5)),
+                Box::new(Object {
+                    material: Dielectric { refraction: 5.0 },
+                    shape: nc::shape::Ball::new(0.5),
                     transform: transform1,
-                },
+                }),
                 nc::shape::Ball::new(0.5).bounding_volume(&transform1),
             ),
             (
-                Object {
-                    material: Box::new(Isotropic {
-                        albedo: Box::new(LinSrgb::new(0.3, 0.5, 0.8)),
-                    }),
-                    shape: Box::new(ConstantMedium {
-                        shape: Box::new(nc::shape::Ball::new(0.5)),
-                    }),
+                Box::new(Object {
+                    material: Isotropic {
+                        albedo: LinSrgb::new(0.3, 0.5, 0.8),
+                    },
+                    shape: nc::shape::Ball::new(0.5),
                     transform: transform2,
-                },
+                }),
                 nc::shape::Ball::new(0.5).bounding_volume(&transform2),
             ),
             (
-                Object {
-                    material: Box::new(Metal {
-                        albedo: Box::new(Checkerboard {
-                            odd: Box::new(LinSrgb::new(0.0, 0.0, 0.0)),
-                            even: Box::new(LinSrgb::new(1.0, 1.0, 1.0)),
+                Box::new(Object {
+                    material: Metal {
+                        albedo: Checkerboard {
+                            odd: LinSrgb::new(0.0, 0.0, 0.0),
+                            even: LinSrgb::new(1.0, 1.0, 1.0),
                             size: 10.0,
-                        }),
+                        },
                         fuzz: 0.0,
-                    }),
-                    shape: Box::new(nc::shape::Ball::new(100.0)),
+                    },
+                    shape: nc::shape::Ball::new(100.0),
                     transform: transform3,
-                },
+                }),
                 nc::shape::Ball::new(100.0).bounding_volume(&transform3),
             ),
             (
-                Object {
-                    material: Box::new(DiffuseLight {
-                        value: Box::new(LinSrgb::new(5.0, 5.0, 5.0)),
-                    }),
-                    shape: Box::new(nc::shape::Ball::new(0.5)),
+                Box::new(Object {
+                    material: DiffuseLight {
+                        value: LinSrgb::new(5.0, 5.0, 5.0),
+                    },
+                    shape: nc::shape::Ball::new(0.5),
                     transform: transform4,
-                },
+                }),
                 nc::shape::Ball::new(0.5).bounding_volume(&transform4),
             ),
         ])
@@ -332,7 +362,7 @@ struct CostByRayCast<'a> {
     ray: &'a Ray,
 }
 
-impl<'a> nc::partitioning::BVTCostFn<Scalar, Object, AABB> for CostByRayCast<'a> {
+impl<'a> nc::partitioning::BVTCostFn<Scalar, Box<ObjectTrait>, AABB> for CostByRayCast<'a> {
     type UserData = RayIntersection;
 
     fn compute_bv_cost(&mut self, bv: &AABB) -> Option<Scalar> {
@@ -341,24 +371,22 @@ impl<'a> nc::partitioning::BVTCostFn<Scalar, Object, AABB> for CostByRayCast<'a>
         bv.toi_with_ray(&Isometry::identity(), self.ray, true)
     }
 
-    fn compute_b_cost(&mut self, b: &Object) -> Option<(Scalar, Self::UserData)> {
-        b.shape
-            .toi_and_normal_and_uv_with_ray(&b.transform, self.ray, true)
-            .map(|i| (i.toi, i))
+    fn compute_b_cost(&mut self, b: &Box<ObjectTrait>) -> Option<(Scalar, Self::UserData)> {
+        b.raycast(self.ray).map(|i| (i.toi, i))
     }
 }
 
-struct Object {
-    material: Box<Material>,
-    shape: Box<RayCast>,
+struct Object<M: Material, S: nc::query::RayCast<Scalar>> {
+    material: M,
+    shape: S,
     transform: Isometry,
 }
 
-struct ConstantMedium {
-    shape: Box<RayCast>,
+struct ConstantMedium<S: nc::query::RayCast<Scalar>> {
+    shape: S,
 }
 
-impl nc::query::RayCast<Scalar> for ConstantMedium {
+impl<S: nc::query::RayCast<Scalar>> nc::query::RayCast<Scalar> for ConstantMedium<S> {
     fn toi_and_normal_with_ray(
         &self,
         m: &Isometry,
@@ -384,11 +412,11 @@ trait Material {
     }
 }
 
-struct Lambertian {
-    albedo: Box<Texture>,
+struct Lambertian<T: Texture> {
+    albedo: T,
 }
 
-impl Material for Lambertian {
+impl<T: Texture> Material for Lambertian<T> {
     fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, LinSrgb)> {
         let target = intersection.point(&ray) + intersection.normal + rand_in_sphere();
 
@@ -402,12 +430,12 @@ impl Material for Lambertian {
     }
 }
 
-struct Metal {
-    albedo: Box<Texture>,
+struct Metal<T: Texture> {
+    albedo: T,
     fuzz: Scalar,
 }
 
-impl Material for Metal {
+impl<T: Texture> Material for Metal<T> {
     fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, LinSrgb)> {
         let reflected = reflect(&ray.dir.normalize(), &intersection.normal);
 
@@ -463,11 +491,11 @@ impl Material for Dielectric {
     }
 }
 
-struct DiffuseLight {
-    value: Box<Texture>,
+struct DiffuseLight<T: Texture> {
+    value: T,
 }
 
-impl Material for DiffuseLight {
+impl<T: Texture> Material for DiffuseLight<T> {
     fn scatter(&self, _: &Ray, _: &RayIntersection) -> Option<(Ray, LinSrgb)> {
         None
     }
@@ -477,11 +505,11 @@ impl Material for DiffuseLight {
     }
 }
 
-struct Isotropic {
-    albedo: Box<Texture>,
+struct Isotropic<T: Texture> {
+    albedo: T,
 }
 
-impl Material for Isotropic {
+impl<T: Texture> Material for Isotropic<T> {
     fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, LinSrgb)> {
         Some((
             Ray {
@@ -507,13 +535,13 @@ impl Texture for LinSrgb {
     }
 }
 
-struct Checkerboard {
-    even: Box<Texture>,
-    odd: Box<Texture>,
+struct Checkerboard<E: Texture, O: Texture> {
+    even: E,
+    odd: O,
     size: Scalar,
 }
 
-impl Texture for Checkerboard {
+impl<E: Texture, O: Texture> Texture for Checkerboard<E, O> {
     fn sample(&self, u: Scalar, v: Scalar, p: Point) -> LinSrgb {
         let p = p * self.size;
         if p.x.sin() * p.y.sin() * p.z.sin() < 0.0 {
