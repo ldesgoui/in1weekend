@@ -13,3 +13,10 @@ ncollide3d = "0.17"
 palette = "0.4"
 pretty_env_logger = "0.2.5"
 rand = "0.5.5"
+
+[profile.dev]
+opt-level = 3
+codegen-units = 1
+
+[profile.release]
+codegen-units = 1

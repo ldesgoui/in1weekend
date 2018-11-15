@@ -324,7 +324,10 @@ impl Default for Scene {
                     material: Isotropic {
                         albedo: LinSrgb::new(0.3, 0.5, 0.8),
                     },
-                    shape: nc::shape::Ball::new(0.5),
+                    shape: ConstantMedium {
+                        shape: nc::shape::Ball::new(0.5),
+                        density: 0.5,
+                    },
                     transform: transform2,
                 }),
                 nc::shape::Ball::new(0.5).bounding_volume(&transform2),
@@ -347,7 +350,7 @@ impl Default for Scene {
             (
                 Box::new(Object {
                     material: DiffuseLight {
-                        value: LinSrgb::new(5.0, 5.0, 5.0),
+                        value: LinSrgb::new(1.0, 1.0, 1.0),
                     },
                     shape: nc::shape::Ball::new(0.5),
                     transform: transform4,
@@ -384,6 +387,7 @@ struct Object<M: Material, S: nc::query::RayCast<Scalar>> {
 
 struct ConstantMedium<S: nc::query::RayCast<Scalar>> {
     shape: S,
+    density: Scalar,
 }
 
 impl<S: nc::query::RayCast<Scalar>> nc::query::RayCast<Scalar> for ConstantMedium<S> {
@@ -393,7 +397,23 @@ impl<S: nc::query::RayCast<Scalar>> nc::query::RayCast<Scalar> for ConstantMediu
         ray: &Ray,
         solid: bool,
     ) -> Option<RayIntersection> {
-        self.shape.toi_and_normal_with_ray(m, ray, solid)
+        let intersection1 = self.shape.toi_and_normal_with_ray(m, ray, solid)?;
+        let new_ray = Ray {
+            origin: intersection1.point(&ray) + (ray.dir * 0.0001),
+            dir: ray.dir,
+        };
+        let intersection2 = self.shape.toi_and_normal_with_ray(m, ray, solid)?;
+        let distance_through =
+            (intersection2.point(&new_ray) - intersection1.point(&ray)).magnitude();
+        let hit_distance = -(1.0 / self.density) * rand::random::<Scalar>().ln();
+        if hit_distance >= distance_through {
+            return None;
+        }
+        Some(RayIntersection {
+            toi: intersection1.toi + hit_distance,
+            normal: Vector::y(),
+            uvs: None,
+        })
     }
 }
 
