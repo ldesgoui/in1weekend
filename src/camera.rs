@@ -58,8 +58,8 @@ impl Camera {
                     "{spinner} ",
                     "{bar} ",
                     "{percent:>3}%, ",
-                    "Elapsed: {elapsed}, ",
-                    "ETA: {eta}, ",
+                    "Elapsed: {elapsed_precise}, ",
+                    "ETA: {eta_precise}, ",
                     "Samples per second: {wide_msg} "
                 ))
                 .progress_chars("█▇▆▅▄▃▂▁ "),
