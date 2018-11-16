@@ -14,16 +14,21 @@ pub trait Object: Send + Sync {
     fn aabb(&self) -> AABB;
 }
 
-pub struct ObjectInner<M: Material, S: nc::shape::Shape<Scalar>>
+pub struct ObjectInner<M, S>
 where
-    M: Sync + Send,
+    M: Material + Sync + Send,
+    S: nc::shape::Shape<Scalar>,
 {
     pub material: M,
     pub shape: S,
     pub transform: Isometry,
 }
 
-impl<M: Material + Sync + Send, S: nc::shape::Shape<Scalar>> Object for ObjectInner<M, S> {
+impl<M, S> Object for ObjectInner<M, S>
+where
+    M: Material + Sync + Send,
+    S: nc::shape::Shape<Scalar>,
+{
     fn ray_cast(&self, ray: &Ray) -> Option<RayIntersection> {
         self.shape
             .as_ray_cast()?
