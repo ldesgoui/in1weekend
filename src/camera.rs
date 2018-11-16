@@ -49,9 +49,59 @@ impl Camera {
             samples: samples,
         }
     }
+    pub fn capture(&self, scene: &Scene) -> image::RgbImage {
+        let started = std::time::Instant::now();
+        let bar = self.create_progress_bar();
+
+        let img = image::RgbImage::from_fn(self.resolution.x, self.resolution.y, |x, y| {
+            if x == 0 {
+                bar.inc(1);
+                bar.set_message(&self.samples_per_second(x, y, started.elapsed()));
+            }
+            self.capture_pixel(scene, x, y)
+        });
+
+        bar.finish_with_message("Finished after {elapsed}, Samples per second: {wide_msg}");
+
+        img
+    }
+
+    fn capture_pixel(&self, scene: &Scene, x: u32, y: u32) -> image::Rgb<u8> {
+        use palette::Pixel;
+        use rayon::iter::{IntoParallelIterator, ParallelIterator};
+
+        let color = (0..self.samples)
+            .into_par_iter()
+            .map(|_| {
+                let u = (rand::random::<Scalar>() + x as Scalar) / self.resolution.x as Scalar;
+                let v = (rand::random::<Scalar>() + y as Scalar) / self.resolution.y as Scalar;
+                scene.trace(&self.ray(u, v), 0)
+            })
+            .reduce(|| LinSrgb::new(0.0, 0.0, 0.0), |a, b| a + b)
+            / self.samples as f32;
+
+        let srgb: palette::Srgb<u8> = palette::Srgb::from_linear(color).into_format();
+
+        image::Rgb {
+            data: *srgb.as_raw(),
+        }
+    }
+
+    fn ray(&self, u: Scalar, v: Scalar) -> Ray {
+        let rd = self.lens_radius * rand_in_disk();
+        let offset = self.u * rd.x + self.v * rd.y;
+
+        Ray {
+            origin: self.origin + offset,
+            dir: self.top_left_corner + u * self.horizontal
+                - v * self.vertical
+                - self.origin
+                - offset,
+        }
+    }
 
     fn create_progress_bar(&self) -> indicatif::ProgressBar {
-        let bar = indicatif::ProgressBar::new(self.resolution.x as u64 * self.resolution.y as u64);
+        let bar = indicatif::ProgressBar::new(self.resolution.y as u64);
         bar.set_style(
             indicatif::ProgressStyle::default_bar()
                 .template(concat!(
@@ -90,58 +140,6 @@ impl Camera {
             rate if rate <= 1e-03 => format!("{:.2} micro", rate / 1e-06),
             rate if rate <= 1e-00 => format!("{:.2} milli", rate / 1e-03),
             _ => format!("{:.2}      ", rate),
-        }
-    }
-
-    pub fn capture(&self, scene: &Scene) -> image::RgbImage {
-        let started = std::time::Instant::now();
-        let bar = self.create_progress_bar();
-
-        let img = image::RgbImage::from_fn(self.resolution.x, self.resolution.y, |x, y| {
-            if x == 0 {
-                bar.inc(self.resolution.x as u64);
-                bar.set_message(&self.samples_per_second(x, y, started.elapsed()));
-            }
-            self.capture_pixel(scene, x, y)
-        });
-
-        bar.finish_with_message("Finished after {elapsed}, Samples per second: {wide_msg}");
-
-        img
-    }
-
-    fn capture_pixel(&self, scene: &Scene, x: u32, y: u32) -> image::Rgb<u8> {
-        use rayon::iter::IntoParallelIterator;
-        use rayon::iter::ParallelIterator;
-
-        let color = (0..self.samples)
-            .into_par_iter()
-            .map(|_| {
-                let u = (rand::random::<Scalar>() + x as Scalar) / self.resolution.x as Scalar;
-                let v = (rand::random::<Scalar>() + y as Scalar) / self.resolution.y as Scalar;
-                scene.trace(&self.ray(u, v), 0)
-            })
-            .reduce(|| LinSrgb::new(0.0, 0.0, 0.0), |a, b| a + b)
-            / self.samples as f32;
-
-        let srgb: palette::Srgb<u8> = palette::Srgb::from_linear(color).into_format();
-
-        use palette::Pixel;
-        image::Rgb {
-            data: *srgb.as_raw(),
-        }
-    }
-
-    fn ray(&self, u: Scalar, v: Scalar) -> Ray {
-        let rd = self.lens_radius * rand_in_disk();
-        let offset = self.u * rd.x + self.v * rd.y;
-
-        Ray {
-            origin: self.origin + offset,
-            dir: self.top_left_corner + u * self.horizontal
-                - v * self.vertical
-                - self.origin
-                - offset,
         }
     }
 }

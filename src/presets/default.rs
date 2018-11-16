@@ -9,7 +9,7 @@ pub fn camera() -> Camera {
         0.0,
         None,
         1.0 / 500.0,
-        na::Vector2::new(1000, 1000),
+        na::Vector2::new(100, 100),
         200,
     )
 }
@@ -33,13 +33,19 @@ pub fn scene() -> Scene {
                 attenuation: LinSrgb::new(1.0, 1.0, 1.0),
             },
             translation: Vector::new(0.0, 0.0, -1.0),
+            rotation: Vector::y() * 0.5,
         }, {
             shape: nc::shape::Cuboid::new(Vector::new(1.0, 1.0, 1.0)),
             material: Metal {
                 fuzz: 0.2,
                 albedo: LinSrgb::new(0.8, 0.6, 0.3),
             },
+            //material: Dielectric {
+            //    refraction: 1.52,
+            //    attenuation: LinSrgb::new(1.0, 1.0, 1.0),
+            //},
             translation: Vector::new(-3.0, 0.0, -1.0),
+            rotation: Vector::y() * 0.5,
         }],
     }
 }

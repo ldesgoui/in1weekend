@@ -4,16 +4,13 @@ const ANTI_ACNE: Scalar = 0.001;
 
 pub trait Material {
     fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, LinSrgb)>;
-    fn emitted(&self, _: Scalar, _: Scalar, _: Point) -> LinSrgb {
-        Default::default()
+
+    fn emitted(&self, _: Option<na::Point2<Scalar>>, _: Point) -> LinSrgb {
+        LinSrgb::default()
     }
 
     fn emitted_using_intersection(&self, ray: &Ray, intersection: &RayIntersection) -> LinSrgb {
-        if let Some(uvs) = intersection.uvs {
-            self.emitted(uvs.x, uvs.y, intersection.point(&ray))
-        } else {
-            Default::default()
-        }
+        self.emitted(intersection.uvs, intersection.point(&ray))
     }
 }
 
@@ -30,7 +27,7 @@ impl<T: Texture> Material for Lambertian<T> {
                 origin: intersection.point(&ray) + intersection.normal * ANTI_ACNE,
                 dir: target - intersection.point(&ray),
             },
-            self.albedo.sample(0.0, 0.0, intersection.point(&ray)),
+            self.albedo.sample_using_intersection(&ray, &intersection),
         ))
     }
 }
@@ -53,7 +50,7 @@ impl<T: Texture> Material for Metal<T> {
                 origin: intersection.point(&ray) + intersection.normal * ANTI_ACNE,
                 dir: reflected + self.fuzz * rand_in_sphere(),
             },
-            self.albedo.sample(0.0, 0.0, intersection.point(&ray)),
+            self.albedo.sample_using_intersection(&ray, &intersection),
         ))
     }
 }
@@ -64,7 +61,6 @@ pub struct Dielectric {
 }
 
 impl Material for Dielectric {
-    // probably broken
     fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, LinSrgb)> {
         let rdotn = ray.dir.dot(&intersection.normal);
 
@@ -99,6 +95,36 @@ impl Material for Dielectric {
     }
 }
 
+pub struct DiffuseLight<T: Texture> {
+    pub value: T,
+}
+
+impl<T: Texture> Material for DiffuseLight<T> {
+    fn scatter(&self, _: &Ray, _: &RayIntersection) -> Option<(Ray, LinSrgb)> {
+        None
+    }
+
+    fn emitted(&self, uv: Option<na::Point2<Scalar>>, p: Point) -> LinSrgb {
+        self.value.sample(uv, p)
+    }
+}
+
+pub struct Isotropic<T: Texture> {
+    pub albedo: T,
+}
+
+impl<T: Texture> Material for Isotropic<T> {
+    fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, LinSrgb)> {
+        Some((
+            Ray {
+                origin: intersection.point(&ray) + intersection.normal * ANTI_ACNE,
+                dir: rand_in_sphere(),
+            },
+            self.albedo.sample_using_intersection(&ray, &intersection),
+        ))
+    }
+}
+
 pub fn refract(v: &Vector, n: &Vector, ni_over_nt: Scalar) -> Option<Vector> {
     let uv = v.normalize();
     let dt = uv.dot(&n);
@@ -114,36 +140,4 @@ pub fn schlick(cosine: Scalar, refraction: Scalar) -> Scalar {
     let r0 = (1.0 - refraction) / (1.0 + refraction);
     let r0 = r0 * r0;
     r0 + (1.0 - r0) * (1.0 - cosine).powi(5)
-}
-
-pub struct DiffuseLight<T: Texture> {
-    pub value: T,
-}
-
-impl<T: Texture> Material for DiffuseLight<T> {
-    fn scatter(&self, _: &Ray, _: &RayIntersection) -> Option<(Ray, LinSrgb)> {
-        None
-    }
-
-    fn emitted(&self, u: Scalar, v: Scalar, p: Point) -> LinSrgb {
-        self.value.sample(u, v, p)
-    }
-}
-
-pub struct Isotropic<T: Texture> {
-    pub albedo: T,
-}
-
-impl<T: Texture> Material for Isotropic<T> {
-    fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, LinSrgb)> {
-        let uvs = intersection.uvs.unwrap_or(na::Point2::origin());
-
-        Some((
-            Ray {
-                origin: intersection.point(&ray) + intersection.normal * ANTI_ACNE,
-                dir: rand_in_sphere(),
-            },
-            self.albedo.sample(uvs.x, uvs.y, intersection.point(&ray)),
-        ))
-    }
 }

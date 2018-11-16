@@ -9,8 +9,8 @@ pub fn camera() -> Camera {
         0.0,
         None,
         1.0 / 500.0,
-        na::Vector2::new(500, 500),
-        100,
+        na::Vector2::new(1000, 1000),
+        500,
     )
 }
 
@@ -63,9 +63,11 @@ pub fn scene() -> Scene {
             },
             translation: Vector::new(-0.3, -0.6, -0.3),
         }, { // bigger object
-            shape: nc::shape::Ball::new(0.6),
-            material: Lambertian {
-                albedo: LinSrgb::new(0.8, 0.6, 0.2),
+            // shape: nc::shape::Ball::new(0.6),
+            shape: nc::shape::Cuboid::new(Vector::new(0.3, 0.6, 0.3)),
+            material: Dielectric {
+                attenuation: LinSrgb::new(1.0, 1.0, 1.0),
+                refraction: 1.52,
             },
             translation: Vector::new(0.3, -0.4, 0.3),
         }],
