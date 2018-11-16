@@ -6,7 +6,7 @@ use crate::prelude::*;
 // we pass a Boxed Trait to the tree and implement composites through generics
 // it limits the number of derefs required to 1 instead of N
 //
-pub trait Object {
+pub trait Object: Send + Sync {
     fn ray_cast(&self, ray: &Ray) -> Option<RayIntersection>;
     fn material_scatter(&self, ray: &Ray, intersection: &RayIntersection)
         -> Option<(Ray, LinSrgb)>;
@@ -14,13 +14,16 @@ pub trait Object {
     fn aabb(&self) -> AABB;
 }
 
-pub struct ObjectInner<M: Material, S: nc::shape::Shape<Scalar>> {
+pub struct ObjectInner<M: Material, S: nc::shape::Shape<Scalar>>
+where
+    M: Sync + Send,
+{
     pub material: M,
     pub shape: S,
     pub transform: Isometry,
 }
 
-impl<M: Material, S: nc::shape::Shape<Scalar>> Object for ObjectInner<M, S> {
+impl<M: Material + Sync + Send, S: nc::shape::Shape<Scalar>> Object for ObjectInner<M, S> {
     fn ray_cast(&self, ray: &Ray) -> Option<RayIntersection> {
         self.shape
             .as_ray_cast()?

@@ -124,13 +124,13 @@ impl Camera {
         // TODO: extract sample distribution ?
 
         let color = (0..self.samples)
-            .into_iter()
+            .into_par_iter()
             .map(|_| {
                 let u = (rand::random::<f32>() + x as f32) / self.resolution.x as f32;
                 let v = (rand::random::<f32>() + y as f32) / self.resolution.y as f32;
                 scene.trace(&self.ray(u, v), 0)
             })
-            .fold(LinSrgb::new(0.0, 0.0, 0.0), |a, b| a + b)
+            .reduce(|| LinSrgb::new(0.0, 0.0, 0.0), |a, b| a + b)
             / self.samples as f32;
 
         let srgb: palette::Srgb<u8> = palette::Srgb::from_linear(color).into_format();
