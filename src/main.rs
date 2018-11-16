@@ -1,31 +1,39 @@
+extern crate clap;
 extern crate in1weekend;
 
-use in1weekend::prelude::*;
+use in1weekend::presets::*;
 
 fn main() -> Result<(), failure::Error> {
-    pretty_env_logger::init();
-    info!("version: {}", in1weekend::VERSION);
+    let matches = clap::App::new("in1weekend")
+        .arg(
+            clap::Arg::with_name("PRESET")
+                .multiple(true)
+                .default_value("default"),
+        )
+        .get_matches();
 
-    warn!("creating scene");
-    let scene = Scene::default();
+    for preset in matches.values_of("PRESET").expect("no preset") {
+        match preset {
+            "cornell" => preset!(cornell),
+            "default" => preset!(default),
+            _ => {
+                println!("preset not found: {:?}", preset);
+            }
+        }
+    }
 
-    warn!("grabbing camera");
-    let camera = Camera::default();
-
-    warn!("checking it");
-    camera.bench(&scene, 1000);
-
-    warn!("capturing");
-    let picture = camera.capture(&scene);
-
-    warn!("saving");
-    picture.save("out.png")?;
-
-    warn!("viewing result");
-    std::process::Command::new("feh")
-        .args(&["-F", "out.png"])
-        .status()?;
-
-    warn!("success, exiting");
     Ok(())
+}
+
+#[macro_export]
+macro_rules! preset {
+    ( $preset:ident ) => {{
+        $preset::camera()
+            .capture(&$preset::scene())
+            .save(concat!(stringify!($preset), ".png"))?;
+
+        std::process::Command::new("feh")
+            .args(&["-F", concat!(stringify!($preset), ".png")])
+            .status()?;
+    }};
 }

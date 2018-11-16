@@ -16,12 +16,6 @@ pub struct Camera {
     samples: u32,
 }
 
-impl Default for Camera {
-    fn default() -> Self {
-        presets::default::camera()
-    }
-}
-
 impl Camera {
     pub fn new(
         from: &Point,
@@ -56,78 +50,75 @@ impl Camera {
         }
     }
 
-    pub fn bench(&self, scene: &Scene, pixels: u32) {
-        use rand::Rng;
+    fn create_progress_bar(&self) -> indicatif::ProgressBar {
+        let bar = indicatif::ProgressBar::new(self.resolution.x as u64 * self.resolution.y as u64);
+        bar.set_style(
+            indicatif::ProgressStyle::default_bar()
+                .template(concat!(
+                    "{spinner} ",
+                    "{bar} ",
+                    "{percent:>3}%, ",
+                    "Elapsed: {elapsed}, ",
+                    "ETA: {eta}, ",
+                    "Samples per second: {wide_msg} "
+                ))
+                .progress_chars("█▇▆▅▄▃▂▁ "),
+        );
+        bar
+    }
 
-        debug!("benchmarking {:?} random pixels", pixels);
+    fn samples_per_second(&self, x: u32, y: u32, elapsed: std::time::Duration) -> String {
+        let seconds: f32 = elapsed.as_secs() as f32 + (elapsed.subsec_nanos() as f32) / 1e9;
+        let samples = ((x + y * self.resolution.y) * self.samples) as f32;
+        let rate = samples / seconds;
 
-        let before_render = std::time::Instant::now();
-        let mut rng = rand::thread_rng();
-        let mut img = image::RgbImage::new(1, 1);
-
-        for _ in 0..pixels {
-            let color = self.capture_pixel(
-                scene,
-                rng.gen_range(0, self.resolution.x),
-                rng.gen_range(0, self.resolution.y),
-            );
-            img.put_pixel(0, 0, color);
+        match rate {
+            rate if rate >= 1e+24 => format!("{:.2} yotta", rate / 1e+24),
+            rate if rate >= 1e+21 => format!("{:.2} zetta", rate / 1e+21),
+            rate if rate >= 1e+18 => format!("{:.2} exa  ", rate / 1e+18),
+            rate if rate >= 1e+15 => format!("{:.2} peta ", rate / 1e+15),
+            rate if rate >= 1e+12 => format!("{:.2} tera ", rate / 1e+12),
+            rate if rate >= 1e+09 => format!("{:.2} giga ", rate / 1e+09),
+            rate if rate >= 1e+06 => format!("{:.2} mega ", rate / 1e+06),
+            rate if rate >= 1e+03 => format!("{:.2} kilo ", rate / 1e+03),
+            rate if rate <= 1e-03 => format!("{:.2} milli", rate / 1e-03),
+            rate if rate <= 1e-06 => format!("{:.2} micro", rate / 1e-06),
+            rate if rate <= 1e-09 => format!("{:.2} nano ", rate / 1e-09),
+            rate if rate <= 1e-12 => format!("{:.2} pico ", rate / 1e-12),
+            rate if rate <= 1e-15 => format!("{:.2} femto", rate / 1e-15),
+            rate if rate <= 1e-18 => format!("{:.2} atto ", rate / 1e-18),
+            rate if rate <= 1e-21 => format!("{:.2} zepto", rate / 1e-21),
+            rate if rate <= 1e-24 => format!("{:.2} yocto", rate / 1e-24),
+            _ => format!("{:.2} yocto", rate),
         }
-
-        debug!(
-            "results: {:?} ({:?} samples/second)",
-            before_render.elapsed(),
-            (pixels * self.samples) as f32
-                / (before_render.elapsed().as_nanos() as f32 / 1_000_000_000.0)
-        );
-        info!(
-            "estimating for full render: {:?}",
-            (before_render.elapsed() / pixels) * self.resolution.x * self.resolution.y
-        );
     }
 
     pub fn capture(&self, scene: &Scene) -> image::RgbImage {
-        // TODO: parallelism
-        // TODO: generate chunks and stitch chunks
-        // (I assume this helps data locality? generating a
-        // big image with low sample amount is much slower than
-        // generating a small image with large sample amount)
-        let before_render = std::time::Instant::now();
-        let mut last_print = std::time::Instant::now();
-        let second = std::time::Duration::from_secs(1);
-        let total_pixels = self.resolution.x * self.resolution.y;
+        let started = std::time::Instant::now();
+        let bar = self.create_progress_bar();
 
-        let ret = image::RgbImage::from_fn(self.resolution.x, self.resolution.y, |x, y| {
-            if last_print.elapsed() > second {
-                let pixels = y * self.resolution.x + x;
-                info!(
-                    "progress: {:5.1}% in {:-3.1?}",
-                    100.0 * pixels as f32 / total_pixels as f32,
-                    elapsed = before_render.elapsed(),
-                );
-                last_print = std::time::Instant::now();
+        let img = image::RgbImage::from_fn(self.resolution.x, self.resolution.y, |x, y| {
+            if x == 0 {
+                bar.inc(self.resolution.x as u64);
+                bar.set_message(&self.samples_per_second(x, y, started.elapsed()));
             }
             self.capture_pixel(scene, x, y)
         });
-        info!(
-            "total render: {:?} ({:?} p/s)",
-            before_render.elapsed(),
-            total_pixels as f32 / (before_render.elapsed().as_nanos() as f32 / 1_000_000_000.0)
-        );
-        ret
+
+        bar.finish_with_message("Finished after {elapsed}, Samples per second: {wide_msg}");
+
+        img
     }
 
     fn capture_pixel(&self, scene: &Scene, x: u32, y: u32) -> image::Rgb<u8> {
         use rayon::iter::IntoParallelIterator;
         use rayon::iter::ParallelIterator;
-        // TODO: shutter speed / motion blur
-        // TODO: extract sample distribution ?
 
         let color = (0..self.samples)
             .into_par_iter()
             .map(|_| {
-                let u = (rand::random::<f32>() + x as f32) / self.resolution.x as f32;
-                let v = (rand::random::<f32>() + y as f32) / self.resolution.y as f32;
+                let u = (rand::random::<Scalar>() + x as Scalar) / self.resolution.x as Scalar;
+                let v = (rand::random::<Scalar>() + y as Scalar) / self.resolution.y as Scalar;
                 scene.trace(&self.ray(u, v), 0)
             })
             .reduce(|| LinSrgb::new(0.0, 0.0, 0.0), |a, b| a + b)
@@ -141,7 +132,7 @@ impl Camera {
         }
     }
 
-    fn ray(&self, u: f32, v: f32) -> Ray {
+    fn ray(&self, u: Scalar, v: Scalar) -> Ray {
         let rd = self.lens_radius * rand_in_disk();
         let offset = self.u * rd.x + self.v * rd.y;
 

@@ -36,9 +36,3 @@ impl Scene {
         }
     }
 }
-
-impl Default for Scene {
-    fn default() -> Self {
-        presets::default::scene()
-    }
-}
