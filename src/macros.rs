@@ -5,9 +5,9 @@ macro_rules! mkScene {
     } => {
         mkScene! {
             background: [
-                LinSrgb::new(0.4, 0.5, 1.0),
-                LinSrgb::new(1.0, 1.0, 1.0),
-                LinSrgb::new(0.4, 0.5, 1.0)
+                Color::new(0.4, 0.5, 1.),
+                Color::new(1., 1., 1.),
+                Color::new(0.4, 0.5, 1.)
             ],
             objects: $objects,
         }

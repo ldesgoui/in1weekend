@@ -2,50 +2,44 @@ use crate::prelude::*;
 
 pub fn camera() -> Camera {
     Camera::new(
-        &Point::new(1.0, 1.0, 1.0),
-        &Point::new(0.0, 0.0, -1.0),
+        &Point::new(1., 1., 1.),
+        &Point::new(0., 0., -1.),
         &Vector::y().into(),
-        90.0,
-        0.0,
+        90.,
+        0.,
         None,
-        1.0 / 500.0,
-        na::Vector2::new(100, 100),
-        200,
+        1. / 500.,
+        na::Vector2::new(500, 500),
+        50,
     )
 }
 
 pub fn scene() -> Scene {
     mkScene! {
         objects: [{ // floor
-            shape: nc::shape::Ball::new(100.0),
+            shape: nc::shape::Ball::new(100.),
             material: Lambertian {
                 albedo: Checkerboard {
-                    odd: LinSrgb::new(1.0, 1.0, 1.0),
-                    even: LinSrgb::new(0.0, 0.0, 0.0),
-                    size: 10.0,
+                    odd: Color::new(1., 1., 1.),
+                    even: Color::new(0., 0., 0.),
+                    size: 10.,
                 },
             },
-            translation: Vector::new(0.0, -100.5, 0.0),
+            translation: Vector::new(0., -100.5, 0.),
         }, {
-            shape: nc::shape::Ball::new(1.0),
+            shape: nc::shape::Ball::new(1.),
             material: Dielectric {
                 refraction: 1.52,
-                attenuation: LinSrgb::new(1.0, 1.0, 1.0),
+                attenuation: Color::new(1., 1., 1.),
             },
-            translation: Vector::new(0.0, 0.0, -1.0),
-            rotation: Vector::y() * 0.5,
+            translation: Vector::new(0., 0., -1.),
         }, {
-            shape: nc::shape::Cuboid::new(Vector::new(1.0, 1.0, 1.0)),
+            shape: nc::shape::Cuboid::new(Vector::new(1., 1., 1.)),
             material: Metal {
-                fuzz: 0.2,
-                albedo: LinSrgb::new(0.8, 0.6, 0.3),
+                fuzz: 0.1,
+                albedo: Color::new(0.8, 0.6, 0.3),
             },
-            //material: Dielectric {
-            //    refraction: 1.52,
-            //    attenuation: LinSrgb::new(1.0, 1.0, 1.0),
-            //},
-            translation: Vector::new(-3.0, 0.0, -1.0),
-            rotation: Vector::y() * 0.5,
+            translation: Vector::new(-3., 0., -1.),
         }],
     }
 }

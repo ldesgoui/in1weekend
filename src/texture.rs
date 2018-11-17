@@ -1,17 +1,35 @@
 use crate::prelude::*;
 
 pub trait Texture {
-    fn sample(&self, uv: Option<na::Point2<Scalar>>, p: Point) -> LinSrgb;
-    fn sample_using_intersection(&self, ray: &Ray, intersection: &RayIntersection) -> LinSrgb {
-        self.sample(intersection.uvs, intersection.point(&ray))
+    fn sample(&self, ray: &Ray, intersection: &RayIntersection) -> Color {
+        self.sample_from_normal(intersection.normal)
+            + intersection
+                .uvs
+                .map(|uvs| self.sample_from_uv(uvs))
+                .unwrap_or(Color::default())
+            + self.sample_from_point(intersection.point(&ray))
+    }
+
+    fn sample_from_uv(&self, _uvs: na::Point2<Scalar>) -> Color {
+        Color::default()
+    }
+
+    fn sample_from_normal(&self, _normal: Vector) -> Color {
+        Color::default()
+    }
+
+    fn sample_from_point(&self, _point: Point) -> Color {
+        Color::default()
     }
 }
 
-impl Texture for LinSrgb {
-    fn sample(&self, _: Option<na::Point2<Scalar>>, _: Point) -> LinSrgb {
+impl Texture for Color {
+    fn sample(&self, _: &Ray, _: &RayIntersection) -> Color {
         *self
     }
 }
+
+// COMBINATORS
 
 pub struct Checkerboard<E: Texture, O: Texture> {
     pub even: E,
@@ -20,51 +38,44 @@ pub struct Checkerboard<E: Texture, O: Texture> {
 }
 
 impl<E: Texture, O: Texture> Texture for Checkerboard<E, O> {
-    fn sample(&self, uv: Option<na::Point2<Scalar>>, p: Point) -> LinSrgb {
-        let p = p * self.size;
-        if p.x.sin() * p.y.sin() * p.z.sin() < 0.0 {
-            self.odd.sample(uv, p)
+    fn sample(&self, ray: &Ray, intersection: &RayIntersection) -> Color {
+        let p = intersection.point(&ray) * self.size;
+        if p.x.sin() * p.y.sin() * p.z.sin() < 0. {
+            self.odd.sample(ray, intersection)
         } else {
-            self.even.sample(uv, p)
+            self.even.sample(ray, intersection)
         }
     }
 }
 
-pub struct UVTexture;
+// DEBUG HELPERS
 
-impl Texture for UVTexture {
-    // TODO: wrap
-    fn sample(&self, uv: Option<na::Point2<Scalar>>, _: Point) -> LinSrgb {
-        if let Some(uv) = uv {
-            LinSrgb::new(na::wrap(uv.x, 0.0, 1.0), na::wrap(uv.y, 0.0, 1.0), 0.0)
-        } else {
-            LinSrgb::default()
-        }
+pub struct DebugUV;
+
+impl Texture for DebugUV {
+    fn sample_from_uv(&self, uv: na::Point2<Scalar>) -> Color {
+        palette::Srgb::new(na::wrap(uv.x, 0., 1.), na::wrap(uv.y, 0., 1.), 0.).into_linear()
     }
 }
 
-pub struct PointTexture;
+pub struct DebugPoint;
 
-impl Texture for PointTexture {
-    // TODO: wrap
-    fn sample(&self, _: Option<na::Point2<Scalar>>, p: Point) -> LinSrgb {
-        LinSrgb::new(
-            na::wrap(p.x, 0.0, 1.0),
-            na::wrap(p.y, 0.0, 1.0),
-            na::wrap(p.z, 0.0, 1.0),
+impl Texture for DebugPoint {
+    fn sample_from_point(&self, p: Point) -> Color {
+        palette::Srgb::new(
+            na::wrap(p.x, 0., 1.),
+            na::wrap(p.y, 0., 1.),
+            na::wrap(p.z, 0., 1.),
         )
+        .into_linear()
     }
 }
 
-pub struct NormalTexture;
+pub struct DebugNormal;
 
-impl Texture for NormalTexture {
-    fn sample(&self, _: Option<na::Point2<Scalar>>, _: Point) -> LinSrgb {
-        LinSrgb::default()
-    }
-
-    fn sample_using_intersection(&self, _: &Ray, intersection: &RayIntersection) -> LinSrgb {
-        let n = (intersection.normal + Vector::new(1.0, 1.0, 1.0)) / 2.0;
-        LinSrgb::new(n.x, n.y, n.z)
+impl Texture for DebugNormal {
+    fn sample_from_normal(&self, normal: Vector) -> Color {
+        let n = (normal + Vector::new(1., 1., 1.)) / 2.;
+        palette::Srgb::new(n.x, n.y, n.z).into_linear()
     }
 }

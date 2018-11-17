@@ -2,12 +2,11 @@
 #![feature(duration_as_u128)]
 #![feature(extern_crate_item_prelude)]
 
-pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
-
 pub extern crate image;
 pub extern crate indicatif;
 pub extern crate nalgebra as na;
 pub extern crate ncollide3d as nc;
+pub extern crate noise;
 pub extern crate palette;
 pub extern crate rand;
 pub extern crate rayon;
@@ -33,7 +32,6 @@ pub mod prelude {
     pub use crate::texture::*;
     pub use crate::*;
 
-    pub use palette::LinSrgb;
     pub type Color = palette::LinSrgb;
     pub type AABB = nc::bounding_volume::AABB<Scalar>;
     pub type BVT = nc::partitioning::BVT<Box<Object>, AABB>;
@@ -58,6 +56,6 @@ pub trait Reflect {
 
 impl Reflect for Vector {
     fn reflect(&self, normal: &Vector) -> Self {
-        self - 2.0 * self.dot(&normal) * normal
+        self - 2. * self.dot(&normal) * normal
     }
 }

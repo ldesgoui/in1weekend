@@ -29,7 +29,7 @@ impl Camera {
         samples: u32,
     ) -> Self {
         let theta = vfov.to_radians();
-        let half_height = (theta / 2.0).tan();
+        let half_height = (theta / 2.).tan();
         let half_width = (resolution.x as f32 / resolution.y as f32) * half_height;
         let w = (from - at).normalize();
         let u = up.cross(&w).normalize();
@@ -39,11 +39,11 @@ impl Camera {
             origin: *from,
             top_left_corner: from - half_width * focus_dist * u + half_height * focus_dist * v
                 - focus_dist * w,
-            horizontal: 2.0 * half_width * focus_dist * u,
-            vertical: 2.0 * half_height * focus_dist * v,
+            horizontal: 2. * half_width * focus_dist * u,
+            vertical: 2. * half_height * focus_dist * v,
             u: u,
             v: v,
-            lens_radius: aperture / 2.0,
+            lens_radius: aperture / 2.,
             shutter_speed: shutter_speed,
             resolution: resolution,
             samples: samples,
@@ -81,7 +81,7 @@ impl Camera {
                 let v = (rand::random::<Scalar>() + y as Scalar) / self.resolution.y as Scalar;
                 scene.trace(&self.ray(u, v), 0)
             })
-            .reduce(|| LinSrgb::new(0.0, 0.0, 0.0), |a, b| a + b)
+            .reduce(|| Color::new(0., 0., 0.), |a, b| a + b)
             / self.samples as f32;
 
         let srgb: palette::Srgb<u8> = palette::Srgb::from_linear(color).into_format();

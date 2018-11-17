@@ -7,19 +7,19 @@ pub struct Scene {
     // TODO: transform to texture?
     // figure out how to get u, v, p from ray
     // although that'll require boxed trait
-    pub background: palette::gradient::Gradient<LinSrgb>,
+    pub background: palette::gradient::Gradient<Color>,
     pub objects: std::sync::Arc<BVT>,
 }
 
 impl Scene {
-    pub fn trace(&self, ray: &Ray, depth: u32) -> LinSrgb {
+    pub fn trace(&self, ray: &Ray, depth: u32) -> Color {
         // Apparently, tail-recursion is not so good in Rust
         // can we change this to a loop ?
         match self
             .objects
             .best_first_search(&mut (CostByRayCast { ray: &ray }))
         {
-            None => self.background.get((ray.dir.normalize().y + 1.0) / 2.0),
+            None => self.background.get((ray.dir.normalize().y + 1.) / 2.),
             Some((object, intersection)) => {
                 let emitted = object.material_emitted(&ray, &intersection);
 
