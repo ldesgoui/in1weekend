@@ -17,8 +17,10 @@ rand = "0.5"
 rayon = "1"
 
 [profile.dev]
+debug = false
 opt-level = 3
 codegen-units = 1
 
 [profile.release]
 codegen-units = 1
+lto = true

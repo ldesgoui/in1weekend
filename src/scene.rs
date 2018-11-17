@@ -7,7 +7,7 @@ pub struct Scene {
     // TODO: transform to texture?
     // figure out how to get u, v, p from ray
     // although that'll require boxed trait
-    pub background: palette::gradient::Gradient<Color>,
+    pub background: palette::Gradient<Color>,
     pub objects: std::sync::Arc<BVT>,
 }
 

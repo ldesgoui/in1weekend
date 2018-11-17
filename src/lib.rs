@@ -12,12 +12,12 @@ pub extern crate rand;
 pub extern crate rayon;
 
 pub mod camera;
-pub mod ray;
 #[macro_use]
 pub mod macros;
 pub mod material;
 pub mod object;
 pub mod presets;
+pub mod ray;
 pub mod scene;
 pub mod shape;
 pub mod texture;
@@ -30,7 +30,11 @@ pub mod prelude {
     pub use crate::scene::*;
     pub use crate::shape::*;
     pub use crate::texture::*;
-    pub use crate::*;
+    pub use crate::Reflect;
+
+    // TODO: Generics
+    //          scalar for space
+    //          color
 
     pub type Color = palette::LinSrgb;
     pub type AABB = nc::bounding_volume::AABB<Scalar>;
