@@ -36,7 +36,7 @@ impl Texture for UVTexture {
     // TODO: wrap
     fn sample(&self, uv: Option<na::Point2<Scalar>>, _: Point) -> LinSrgb {
         if let Some(uv) = uv {
-            LinSrgb::new(uv.x, uv.y, 0.0)
+            LinSrgb::new(na::wrap(uv.x, 0.0, 1.0), na::wrap(uv.y, 0.0, 1.0), 0.0)
         } else {
             LinSrgb::default()
         }
@@ -48,6 +48,23 @@ pub struct PointTexture;
 impl Texture for PointTexture {
     // TODO: wrap
     fn sample(&self, _: Option<na::Point2<Scalar>>, p: Point) -> LinSrgb {
-        LinSrgb::new(p.x, p.y, p.z)
+        LinSrgb::new(
+            na::wrap(p.x, 0.0, 1.0),
+            na::wrap(p.y, 0.0, 1.0),
+            na::wrap(p.z, 0.0, 1.0),
+        )
+    }
+}
+
+pub struct NormalTexture;
+
+impl Texture for NormalTexture {
+    fn sample(&self, _: Option<na::Point2<Scalar>>, _: Point) -> LinSrgb {
+        LinSrgb::default()
+    }
+
+    fn sample_using_intersection(&self, _: &Ray, intersection: &RayIntersection) -> LinSrgb {
+        let n = (intersection.normal + Vector::new(1.0, 1.0, 1.0)) / 2.0;
+        LinSrgb::new(n.x, n.y, n.z)
     }
 }

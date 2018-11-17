@@ -20,7 +20,7 @@ pub struct Lambertian<T: Texture> {
 
 impl<T: Texture> Material for Lambertian<T> {
     fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, LinSrgb)> {
-        let target = intersection.point(&ray) + intersection.normal + rand_in_sphere();
+        let target = intersection.point(&ray) + intersection.normal + rand::random::<Vector>();
 
         Some((
             Ray {
@@ -48,19 +48,19 @@ impl<T: Texture> Material for Metal<T> {
         Some((
             Ray {
                 origin: intersection.point(&ray) + intersection.normal * ANTI_ACNE,
-                dir: reflected + self.fuzz * rand_in_sphere(),
+                dir: reflected + self.fuzz * rand::random::<Vector>(),
             },
             self.albedo.sample_using_intersection(&ray, &intersection),
         ))
     }
 }
 
-pub struct Dielectric {
+pub struct Dielectric<T: Texture> {
     pub refraction: Scalar,
-    pub attenuation: LinSrgb,
+    pub attenuation: T,
 }
 
-impl Material for Dielectric {
+impl<T: Texture> Material for Dielectric<T> {
     fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, LinSrgb)> {
         let rdotn = ray.dir.dot(&intersection.normal);
 
@@ -80,7 +80,8 @@ impl Material for Dielectric {
                         origin: intersection.point(&ray) - intersection.normal * ANTI_ACNE,
                         dir: refracted,
                     },
-                    self.attenuation,
+                    self.attenuation
+                        .sample_using_intersection(&ray, &intersection),
                 ));
             }
         }
@@ -90,7 +91,8 @@ impl Material for Dielectric {
                 origin: intersection.point(&ray) + intersection.normal * ANTI_ACNE,
                 dir: ray.dir.reflect(&intersection.normal),
             },
-            self.attenuation,
+            self.attenuation
+                .sample_using_intersection(&ray, &intersection),
         ))
     }
 }
@@ -118,7 +120,7 @@ impl<T: Texture> Material for Isotropic<T> {
         Some((
             Ray {
                 origin: intersection.point(&ray) + intersection.normal * ANTI_ACNE,
-                dir: rand_in_sphere(),
+                dir: rand::random::<Vector>().normalize(),
             },
             self.albedo.sample_using_intersection(&ray, &intersection),
         ))

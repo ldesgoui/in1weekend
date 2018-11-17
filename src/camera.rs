@@ -61,7 +61,11 @@ impl Camera {
             self.capture_pixel(scene, x, y)
         });
 
-        bar.finish_with_message("Finished after {elapsed}, Samples per second: {wide_msg}");
+        bar.finish_with_message(&self.samples_per_second(
+            self.resolution.x,
+            self.resolution.y,
+            started.elapsed(),
+        ));
 
         img
     }
@@ -88,7 +92,7 @@ impl Camera {
     }
 
     fn ray(&self, u: Scalar, v: Scalar) -> Ray {
-        let rd = self.lens_radius * rand_in_disk();
+        let rd = self.lens_radius * rand::random::<na::Vector2<Scalar>>();
         let offset = self.u * rd.x + self.v * rd.y;
 
         Ray {
