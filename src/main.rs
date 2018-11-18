@@ -16,6 +16,7 @@ fn main() -> Result<(), failure::Error> {
         match preset {
             "cornell" => preset!(cornell),
             "default" => preset!(default),
+            "empty" => preset!(empty),
             _ => {
                 println!("preset not found: {:?}", preset);
             }

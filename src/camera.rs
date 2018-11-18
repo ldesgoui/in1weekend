@@ -110,11 +110,11 @@ impl Camera {
             indicatif::ProgressStyle::default_bar()
                 .template(concat!(
                     "{spinner} ",
-                    "{bar} ",
+                    "{wide_bar} ",
                     "{percent:>3}%, ",
                     "Elapsed: {elapsed_precise}, ",
                     "ETA: {eta_precise}, ",
-                    "Samples per second: {wide_msg} "
+                    "Samples per second: {msg} "
                 ))
                 .progress_chars("█▇▆▅▄▃▂▁ "),
         );

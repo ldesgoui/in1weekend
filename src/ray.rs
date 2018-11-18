@@ -1,12 +1,24 @@
 use crate::prelude::*;
 
+const ANTI_ACNE: Scalar = 0.001;
+
 pub trait RayIntersectionPoint {
     fn point(&self, ray: &Ray) -> Point;
+    fn point_nudged_out(&self, ray: &Ray) -> Point;
+    fn point_nudged_in(&self, ray: &Ray) -> Point;
 }
 
 impl RayIntersectionPoint for RayIntersection {
     fn point(&self, ray: &Ray) -> Point {
         ray.origin + ray.dir * self.toi
+    }
+
+    fn point_nudged_out(&self, ray: &Ray) -> Point {
+        self.point(ray) + self.normal * ANTI_ACNE
+    }
+
+    fn point_nudged_in(&self, ray: &Ray) -> Point {
+        self.point(ray) - self.normal * ANTI_ACNE
     }
 }
 

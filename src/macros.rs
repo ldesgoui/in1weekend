@@ -14,14 +14,14 @@ macro_rules! mkScene {
     };
 
     {
-        background: [ $( $color:expr ),+ ],
-        objects: [ $( $object:tt ),+ ],
+        background: [ $( $color:expr ),* ],
+        objects: [ $( $object:tt ),* ],
     } => {
         use nc::shape::Shape;
 
         Scene {
             background: palette::gradient::Gradient::new(vec![ $( $color ),* ]),
-            objects: BVT::new_balanced(vec![ $( mkObject!($object) ),+ ]),
+            objects: BVT::new_balanced(vec![ $( mkObject!($object) ),* ]),
         }
     };
 }

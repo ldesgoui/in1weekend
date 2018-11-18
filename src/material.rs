@@ -1,9 +1,12 @@
 use crate::prelude::*;
 
-const ANTI_ACNE: Scalar = 0.001;
-
 pub trait Material {
-    fn scatter(&self, _ray: &Ray, _intersection: &RayIntersection) -> Option<(Ray, Color)> {
+    fn scatter(
+        &self,
+        _ray: &Ray,
+        _intersection: &RayIntersection,
+        _importance_sample: &Option<(Vector, Scalar)>,
+    ) -> Option<(Ray, Color)> {
         None
     }
 
@@ -17,13 +20,19 @@ pub struct Lambertian<T: Texture> {
 }
 
 impl<T: Texture> Material for Lambertian<T> {
-    fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, Color)> {
+    fn scatter(
+        &self,
+        ray: &Ray,
+        intersection: &RayIntersection,
+        _importance_sample: &Option<(Vector, Scalar)>,
+    ) -> Option<(Ray, Color)> {
         let target = intersection.point(&ray) + intersection.normal + Vector::random_in_sphere();
+        let origin = intersection.point_nudged_out(&ray);
 
         Some((
             Ray {
-                origin: intersection.point(&ray) + intersection.normal * ANTI_ACNE,
-                dir: target - intersection.point(&ray),
+                origin: origin,
+                dir: target - origin,
             },
             self.albedo.sample(&ray, &intersection),
         ))
@@ -36,7 +45,12 @@ pub struct Metal<T: Texture> {
 }
 
 impl<T: Texture> Material for Metal<T> {
-    fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, Color)> {
+    fn scatter(
+        &self,
+        ray: &Ray,
+        intersection: &RayIntersection,
+        _importance_sample: &Option<(Vector, Scalar)>,
+    ) -> Option<(Ray, Color)> {
         let reflected = ray.dir.normalize().reflect(&intersection.normal);
 
         if reflected.dot(&intersection.normal) <= 0. {
@@ -45,7 +59,7 @@ impl<T: Texture> Material for Metal<T> {
 
         Some((
             Ray {
-                origin: intersection.point(&ray) + intersection.normal * ANTI_ACNE,
+                origin: intersection.point_nudged_out(&ray),
                 dir: reflected + self.fuzz * Vector::random_in_sphere(),
             },
             self.albedo.sample(&ray, &intersection),
@@ -59,7 +73,12 @@ pub struct Dielectric<T: Texture> {
 }
 
 impl<T: Texture> Material for Dielectric<T> {
-    fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, Color)> {
+    fn scatter(
+        &self,
+        ray: &Ray,
+        intersection: &RayIntersection,
+        _importance_sample: &Option<(Vector, Scalar)>,
+    ) -> Option<(Ray, Color)> {
         let rdotn = ray.dir.dot(&intersection.normal);
 
         let (outward_normal, ni_over_nt, cosine) = if rdotn > 0. {
@@ -75,7 +94,7 @@ impl<T: Texture> Material for Dielectric<T> {
             if rand::random::<f32>() > reflect_prob {
                 return Some((
                     Ray {
-                        origin: intersection.point(&ray) - intersection.normal * ANTI_ACNE,
+                        origin: intersection.point_nudged_in(&ray),
                         dir: refracted,
                     },
                     self.attenuation.sample(&ray, &intersection),
@@ -85,7 +104,7 @@ impl<T: Texture> Material for Dielectric<T> {
 
         Some((
             Ray {
-                origin: intersection.point(&ray) + intersection.normal * ANTI_ACNE,
+                origin: intersection.point_nudged_out(&ray),
                 dir: ray.dir.reflect(&intersection.normal),
             },
             self.attenuation.sample(&ray, &intersection),
@@ -98,10 +117,6 @@ pub struct DiffuseLight<T: Texture> {
 }
 
 impl<T: Texture> Material for DiffuseLight<T> {
-    fn scatter(&self, _: &Ray, _: &RayIntersection) -> Option<(Ray, Color)> {
-        None
-    }
-
     fn emitted(&self, ray: &Ray, intersection: &RayIntersection) -> Color {
         self.value.sample(ray, intersection)
     }
@@ -112,10 +127,15 @@ pub struct Isotropic<T: Texture> {
 }
 
 impl<T: Texture> Material for Isotropic<T> {
-    fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, Color)> {
+    fn scatter(
+        &self,
+        ray: &Ray,
+        intersection: &RayIntersection,
+        _importance_sample: &Option<(Vector, Scalar)>,
+    ) -> Option<(Ray, Color)> {
         Some((
             Ray {
-                origin: intersection.point(&ray) + intersection.normal * ANTI_ACNE,
+                origin: intersection.point_nudged_out(&ray),
                 dir: Vector::random_on_sphere(),
             },
             self.albedo.sample(&ray, &intersection),
