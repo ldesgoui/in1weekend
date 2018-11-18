@@ -3,7 +3,9 @@ use crate::prelude::*;
 const ANTI_ACNE: Scalar = 0.001;
 
 pub trait Material {
-    fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, Color)>;
+    fn scatter(&self, _ray: &Ray, _intersection: &RayIntersection) -> Option<(Ray, Color)> {
+        None
+    }
 
     fn emitted(&self, _ray: &Ray, _intersection: &RayIntersection) -> Color {
         Color::default()
@@ -16,7 +18,7 @@ pub struct Lambertian<T: Texture> {
 
 impl<T: Texture> Material for Lambertian<T> {
     fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, Color)> {
-        let target = intersection.point(&ray) + intersection.normal + rand::random::<Vector>();
+        let target = intersection.point(&ray) + intersection.normal + Vector::random_in_sphere();
 
         Some((
             Ray {
@@ -44,7 +46,7 @@ impl<T: Texture> Material for Metal<T> {
         Some((
             Ray {
                 origin: intersection.point(&ray) + intersection.normal * ANTI_ACNE,
-                dir: reflected + self.fuzz * rand::random::<Vector>(),
+                dir: reflected + self.fuzz * Vector::random_in_sphere(),
             },
             self.albedo.sample(&ray, &intersection),
         ))
@@ -114,7 +116,7 @@ impl<T: Texture> Material for Isotropic<T> {
         Some((
             Ray {
                 origin: intersection.point(&ray) + intersection.normal * ANTI_ACNE,
-                dir: rand::random::<Vector>().normalize(),
+                dir: Vector::random_on_sphere(),
             },
             self.albedo.sample(&ray, &intersection),
         ))

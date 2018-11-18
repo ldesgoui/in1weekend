@@ -92,7 +92,7 @@ impl Camera {
     }
 
     fn ray(&self, u: Scalar, v: Scalar) -> Ray {
-        let rd = self.lens_radius * rand::random::<Vector2>();
+        let rd = self.lens_radius * Vector2::random_on_sphere();
         let offset = self.u * rd.x + self.v * rd.y;
 
         Ray {

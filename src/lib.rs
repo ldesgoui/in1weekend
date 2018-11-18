@@ -30,7 +30,7 @@ pub mod prelude {
     pub use crate::scene::*;
     pub use crate::shape::*;
     pub use crate::texture::*;
-    pub use crate::Reflect;
+    pub use crate::{Reflect, SphereRandom};
 
     // TODO: Generics
     //          scalar for space
@@ -62,5 +62,30 @@ pub trait Reflect {
 impl Reflect for Vector {
     fn reflect(&self, normal: &Vector) -> Self {
         self - 2. * self.dot(&normal) * normal
+    }
+}
+
+pub trait SphereRandom {
+    fn random_in_sphere() -> Self;
+    fn random_on_sphere() -> Self;
+}
+
+impl SphereRandom for Vector {
+    fn random_in_sphere() -> Self {
+        Vector::random_on_sphere() * rand::random::<Scalar>()
+    }
+
+    fn random_on_sphere() -> Self {
+        (rand::random::<Vector>() * 2. - Vector::new(1., 1., 1.)).normalize()
+    }
+}
+
+impl SphereRandom for Vector2 {
+    fn random_in_sphere() -> Self {
+        Vector2::random_on_sphere() * rand::random::<Scalar>()
+    }
+
+    fn random_on_sphere() -> Self {
+        (rand::random::<Vector2>() * 2. - Vector2::new(1., 1.)).normalize()
     }
 }

@@ -10,7 +10,7 @@ pub fn camera() -> Camera {
         None,
         1. / 500.,
         na::Vector2::new(500, 500),
-        50,
+        100,
     )
 }
 
@@ -33,26 +33,33 @@ pub fn scene() -> Scene {
         }, {
             shape: Ball::new(1.),
             material: Lambertian {
-                albedo: Noise2D {
-                    scale: Vector2::new(10., 10.),
-                    noise: Perlin::new(),
-                    gradient: Gradient::new(vec![
-                        Color::new(1., 0., 0.),
-                        Color::new(0., 1., 0.),
-                        Color::new(0., 0., 1.)
-                    ]),
-                }
+                albedo: Gradient::new(vec![
+                    Color::new(1., 0., 0.),
+                    Color::new(0., 1., 0.),
+                    Color::new(0., 0., 1.)
+                ]),
+            },
+            translation: Vector::new(0., 0., -1.),
+        }, {
+            shape: Ball::new(1.1),
+            material: Dielectric {
+                attenuation: Color::new(1., 1., 1.),
+                refraction: 1.52,
             },
             translation: Vector::new(0., 0., -1.),
         }, {
             shape: Cuboid::new(Vector::new(1., 1., 1.)),
             material: Metal {
                 fuzz: 0.01,
-                albedo: Gradient::new(vec![
-                    Color::new(0., 0., 0.),
-                    Color::new(0.8, 0.6, 0.3),
-                    Color::new(0., 0., 0.),
-                ]),
+                albedo: Noise3D {
+                    scale: Vector::new(1., 1., 1.),
+                    noise: Perlin::new(),
+                    gradient: Gradient::new(vec![
+                        Color::new(0., 0., 0.),
+                        Color::new(0.8, 0.6, 0.3),
+                        Color::new(0., 0., 0.),
+                    ]),
+                }
             },
             translation: Vector::new(-3., 0., -1.),
         }],
