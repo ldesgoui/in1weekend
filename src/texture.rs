@@ -11,24 +11,52 @@ impl Texture for Color {
     }
 }
 
+impl Texture for palette::Gradient<Color> {
+    fn sample(&self, _: &Ray, intersection: &RayIntersection) -> Color {
+        if let Some(uvs) = intersection.uvs {
+            self.get(uvs.y)
+        } else {
+            Color::default()
+        }
+    }
+}
+
 pub struct Noise2D<N: noise::NoiseFn<[f64; 2]>> {
-    pub noise: N,
     pub gradient: palette::Gradient<Color>,
+    pub noise: N,
+    pub scale: Vector2,
 }
 
 impl<N: noise::NoiseFn<[f64; 2]>> Texture for Noise2D<N> {
     fn sample(&self, _: &Ray, intersection: &RayIntersection) -> Color {
-        intersection
-            .uvs
-            .map(|uvs| {
-                self.gradient
-                    .get(self.noise.get([uvs.x as f64 * 10., uvs.y as f64 * 10.]) as f32 / 2. + 0.5)
-            })
-            .unwrap_or(Color::default())
+        if let Some(uvs) = intersection.uvs {
+            let value = self
+                .noise
+                .get([(uvs.x * self.scale.x) as f64, (uvs.y * self.scale.y) as f64]);
+            self.gradient.get((value as f32 + 1.) / 2.)
+        } else {
+            Color::default()
+        }
     }
 }
 
-struct Noise3D {}
+pub struct Noise3D<N: noise::NoiseFn<[f64; 3]>> {
+    pub gradient: palette::Gradient<Color>,
+    pub noise: N,
+    pub scale: Vector,
+}
+
+impl<N: noise::NoiseFn<[f64; 3]>> Texture for Noise3D<N> {
+    fn sample(&self, ray: &Ray, intersection: &RayIntersection) -> Color {
+        let p = intersection.point(&ray);
+        let value = self.noise.get([
+            (p.x * self.scale.x) as f64,
+            (p.y * self.scale.y) as f64,
+            (p.z * self.scale.z) as f64,
+        ]);
+        self.gradient.get((value as f32 + 1.) / 2.)
+    }
+}
 
 // COMBINATORS
 

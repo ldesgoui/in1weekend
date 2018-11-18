@@ -47,6 +47,7 @@ pub mod prelude {
     pub type Scalar = f32;
     pub type Shape = nc::shape::Shape<Scalar>;
     pub type Vector = na::Vector3<Scalar>;
+    pub type Vector2 = na::Vector2<Scalar>;
     pub type UnitVector = na::Unit<na::Vector3<Scalar>>;
 }
 

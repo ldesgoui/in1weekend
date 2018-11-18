@@ -3,7 +3,7 @@ use crate::prelude::*;
 pub fn camera() -> Camera {
     Camera::new(
         &Point::new(1., 1., 1.),
-        &Point::new(0., 0., -1.),
+        &Point::new(-0.5, 0., -1.),
         &Vector::y().into(),
         90.,
         0.,
@@ -34,6 +34,7 @@ pub fn scene() -> Scene {
             shape: Ball::new(1.),
             material: Lambertian {
                 albedo: Noise2D {
+                    scale: Vector2::new(10., 10.),
                     noise: Perlin::new(),
                     gradient: Gradient::new(vec![
                         Color::new(1., 0., 0.),
@@ -46,8 +47,12 @@ pub fn scene() -> Scene {
         }, {
             shape: Cuboid::new(Vector::new(1., 1., 1.)),
             material: Metal {
-                fuzz: 0.1,
-                albedo: Color::new(0.8, 0.6, 0.3),
+                fuzz: 0.01,
+                albedo: Gradient::new(vec![
+                    Color::new(0., 0., 0.),
+                    Color::new(0.8, 0.6, 0.3),
+                    Color::new(0., 0., 0.),
+                ]),
             },
             translation: Vector::new(-3., 0., -1.),
         }],
