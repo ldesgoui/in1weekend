@@ -21,9 +21,7 @@ macro_rules! mkScene {
 
         Scene {
             background: palette::gradient::Gradient::new(vec![ $( $color ),* ]),
-            objects: std::sync::Arc::new(
-                BVT::new_balanced(vec![ $( mkObject!($object) ),+ ]),
-            ),
+            objects: BVT::new_balanced(vec![ $( mkObject!($object) ),+ ]),
         }
     };
 }

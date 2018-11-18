@@ -8,7 +8,7 @@ pub struct Scene {
     // figure out how to get u, v, p from ray
     // although that'll require boxed trait
     pub background: palette::Gradient<Color>,
-    pub objects: std::sync::Arc<BVT>,
+    pub objects: BVT,
 }
 
 impl Scene {
