@@ -27,18 +27,21 @@ impl<S: nc::shape::Shape<Scalar>> nc::query::RayCast<Scalar> for ConstantMedium<
             .as_ray_cast()?
             .toi_and_normal_with_ray(m, ray, solid)?;
         let new_ray = Ray {
-            origin: intersection1.point(&ray) + (ray.dir * 0.001),
+            origin: intersection1.point_nudged_in(&ray),
             dir: ray.dir,
         };
         let intersection2 = self
             .shape
             .as_ray_cast()?
             .toi_and_normal_with_ray(m, &new_ray, solid)?;
+
         let distance_through = intersection2.toi * ray.dir.magnitude();
         let hit_distance = -(1. / self.density) * rand::random::<Scalar>().ln();
+
         if hit_distance >= distance_through {
             return None;
         }
+
         Some(RayIntersection {
             toi: intersection1.toi + hit_distance / ray.dir.magnitude(),
             normal: Vector::y(),

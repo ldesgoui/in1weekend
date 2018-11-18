@@ -4,7 +4,6 @@ pub trait Texture {
     fn sample(&self, ray: &Ray, intersection: &RayIntersection) -> Color;
 }
 
-// TODO: Generic over IntoColor
 impl Texture for Color {
     fn sample(&self, _: &Ray, _: &RayIntersection) -> Color {
         *self
