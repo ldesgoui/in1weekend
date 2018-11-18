@@ -13,6 +13,10 @@ pub trait Material {
     fn emitted(&self, _ray: &Ray, _intersection: &RayIntersection) -> Color {
         Color::default()
     }
+
+    fn important(&self) -> bool {
+        false
+    }
 }
 
 pub struct Lambertian<T: Texture> {
@@ -110,6 +114,10 @@ impl<T: Texture> Material for Dielectric<T> {
             self.attenuation.sample(&ray, &intersection),
         ))
     }
+
+    fn important(&self) -> bool {
+        true
+    }
 }
 
 pub struct DiffuseLight<T: Texture> {
@@ -119,6 +127,10 @@ pub struct DiffuseLight<T: Texture> {
 impl<T: Texture> Material for DiffuseLight<T> {
     fn emitted(&self, ray: &Ray, intersection: &RayIntersection) -> Color {
         self.value.sample(ray, intersection)
+    }
+
+    fn important(&self) -> bool {
+        true
     }
 }
 

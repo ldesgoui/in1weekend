@@ -17,6 +17,7 @@ macro_rules! mkScene {
         background: [ $( $color:expr ),* ],
         objects: [ $( $object:tt ),* ],
     } => {
+        #[allow(unused_imports)]
         use nc::shape::Shape;
 
         Scene {

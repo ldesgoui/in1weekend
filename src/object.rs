@@ -9,6 +9,8 @@ use crate::prelude::*;
 pub trait Object: Send + Sync {
     fn aabb(&self) -> AABB;
     fn ray_cast(&self, ray: &Ray) -> Option<RayIntersection>;
+    fn random_to_object(&self, from: &Point) -> Vector;
+    fn pdf_value(&self, ray: &Ray, intersection: &RayIntersection) -> Scalar;
     fn material_scatter(
         &self,
         ray: &Ray,
@@ -16,8 +18,7 @@ pub trait Object: Send + Sync {
         importance_sample: &Option<(Vector, Scalar)>,
     ) -> Option<(Ray, Color)>;
     fn material_emitted(&self, ray: &Ray, intersection: &RayIntersection) -> Color;
-    fn random_to_object(&self, from: &Point) -> Vector;
-    fn pdf_value(&self, ray: &Ray, intersection: &RayIntersection) -> Scalar;
+    fn important(&self) -> bool;
 }
 
 pub struct ObjectInner<M, S>
@@ -45,6 +46,16 @@ where
             .toi_and_normal_and_uv_with_ray(&self.transform, ray, false)
     }
 
+    fn random_to_object(&self, from: &Point) -> Vector {
+        // TODO
+        Vector::new(0., 0., 0.)
+    }
+
+    fn pdf_value(&self, _ray: &Ray, _intersection: &RayIntersection) -> Scalar {
+        // TODO
+        0.
+    }
+
     fn material_scatter(
         &self,
         ray: &Ray,
@@ -58,11 +69,7 @@ where
         self.material.emitted(ray, intersection)
     }
 
-    fn random_to_object(&self, from: &Point) -> Vector {
-        Vector::new(0., 0., 0.)
-    }
-
-    fn pdf_value(&self, _ray: &Ray, _intersection: &RayIntersection) -> Scalar {
-        0.
+    fn important(&self) -> bool {
+        self.material.important()
     }
 }
