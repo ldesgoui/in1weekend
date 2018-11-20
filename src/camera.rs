@@ -79,7 +79,13 @@ impl Camera {
             .map(|_| {
                 let u = (rand::random::<Scalar>() + x as Scalar) / self.resolution.x as Scalar;
                 let v = (rand::random::<Scalar>() + y as Scalar) / self.resolution.y as Scalar;
-                scene.trace(&self.ray(u, v))
+                let res = scene.trace(&self.ray(u, v), 0);
+
+                if res.red.is_finite() && res.green.is_finite() && res.blue.is_finite() {
+                    res
+                } else {
+                    unreachable!()
+                }
             })
             .reduce(|| Color::new(0., 0., 0.), |a, b| a + b)
             / self.samples as f32;

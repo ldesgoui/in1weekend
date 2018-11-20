@@ -9,14 +9,14 @@ use crate::prelude::*;
 pub trait Object: Send + Sync {
     fn aabb(&self) -> AABB;
     fn ray_cast(&self, ray: &Ray) -> Option<RayIntersection>;
-    fn random_to_object(&self, from: &Point) -> Vector;
+    fn random_in_object(&self) -> Vector;
     fn pdf_value(&self, ray: &Ray, intersection: &RayIntersection) -> Scalar;
     fn material_scatter(
         &self,
         ray: &Ray,
         intersection: &RayIntersection,
         importance_sample: &Option<(Vector, Scalar)>,
-    ) -> Option<(Ray, Color)>;
+    ) -> Option<(Ray, Color, Scalar)>;
     fn material_emitted(&self, ray: &Ray, intersection: &RayIntersection) -> Color;
     fn important(&self) -> bool;
 }
@@ -24,7 +24,7 @@ pub trait Object: Send + Sync {
 pub struct ObjectInner<M, S>
 where
     M: Material + Sync + Send,
-    S: nc::shape::Shape<Scalar>,
+    S: Shape + Sync + Send,
 {
     pub material: M,
     pub shape: S,
@@ -34,26 +34,23 @@ where
 impl<M, S> Object for ObjectInner<M, S>
 where
     M: Material + Sync + Send,
-    S: nc::shape::Shape<Scalar>,
+    S: Shape + Sync + Send,
 {
     fn aabb(&self) -> AABB {
-        self.shape.aabb(&self.transform)
+        self.shape.bounding_volume(&self.transform)
     }
 
     fn ray_cast(&self, ray: &Ray) -> Option<RayIntersection> {
         self.shape
-            .as_ray_cast()?
             .toi_and_normal_and_uv_with_ray(&self.transform, ray, false)
     }
 
-    fn random_to_object(&self, from: &Point) -> Vector {
-        // TODO
-        Vector::new(0., 0., 0.)
+    fn random_in_object(&self) -> Vector {
+        self.shape.random_in_object(&self.transform)
     }
 
-    fn pdf_value(&self, _ray: &Ray, _intersection: &RayIntersection) -> Scalar {
-        // TODO
-        0.
+    fn pdf_value(&self, ray: &Ray, intersection: &RayIntersection) -> Scalar {
+        self.shape.pdf_value(&self.transform, ray, intersection)
     }
 
     fn material_scatter(
@@ -61,7 +58,7 @@ where
         ray: &Ray,
         intersection: &RayIntersection,
         importance_sample: &Option<(Vector, Scalar)>,
-    ) -> Option<(Ray, Color)> {
+    ) -> Option<(Ray, Color, Scalar)> {
         self.material.scatter(ray, intersection, importance_sample)
     }
 

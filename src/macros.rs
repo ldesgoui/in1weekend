@@ -18,7 +18,7 @@ macro_rules! mkScene {
         objects: [ $( $object:tt ),* ],
     } => {
         #[allow(unused_imports)]
-        use nc::shape::Shape;
+        use nc::bounding_volume::HasBoundingVolume;
 
         Scene {
             background: palette::gradient::Gradient::new(vec![ $( $color ),* ]),
@@ -87,7 +87,7 @@ macro_rules! mkObject {
                 material: $material,
                 transform: $transform,
             }),
-            $shape.aabb(&$transform),
+            $shape.bounding_volume(&$transform),
         )
     };
 }

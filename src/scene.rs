@@ -8,47 +8,34 @@ pub struct Scene {
     pub objects: BVT,
 }
 
+const MAX_ITER: u32 = 50;
+
 impl Scene {
-    pub fn trace(&self, init_ray: &Ray) -> Color {
-        let mut ray = *init_ray;
-        let mut color = Color::default();
-        let mut attenuation = Color::new(1., 1., 1.);
+    pub fn trace(&self, ray: &Ray, iter: u32) -> Color {
+        match self
+            .objects
+            .best_first_search(&mut CostByRayCast { ray: &ray })
+        {
+            None => self.background.get((ray.dir.normalize().y + 1.) / 2.),
+            Some((object, intersection)) => {
+                let emitted = object.material_emitted(&ray, &intersection);
 
-        loop {
-            let search_result = self
-                .objects
-                .best_first_search(&mut CostByRayCast { ray: &ray });
+                if iter >= MAX_ITER {
+                    return emitted;
+                }
 
-            if search_result.is_none() {
-                let background = self.background.get((ray.dir.normalize().y + 1.) / 2.);
-                color = color + attenuation * background;
-                break;
-            }
-
-            let (object, intersection) = search_result.unwrap();
-
-            let emitted = object.material_emitted(&ray, &intersection);
-            color = color + attenuation * emitted;
-
-            let scatter_result = object.material_scatter(
-                &ray,
-                &intersection,
-                &self.importance_sample(&intersection.point_nudged_out(&ray), &object),
-            );
-
-            if scatter_result.is_none() {
-                break;
-            }
-
-            let (scatter_ray, scatter_attenuation) = scatter_result.unwrap();
-            ray = scatter_ray;
-            attenuation = attenuation * scatter_attenuation;
-
-            if attenuation.red + attenuation.green + attenuation.blue < 0.0003 {
-                break;
+                match object.material_scatter(
+                    &ray,
+                    &intersection,
+                    &self.importance_sample(&intersection.point_nudged_out(&ray), &object),
+                ) {
+                    None => emitted,
+                    Some((scattered, attenuation, pdf_value)) => {
+                        emitted + attenuation * self.trace(&scattered, iter + 1) / pdf_value
+                    }
+                }
             }
         }
-        color
     }
 
     fn importance_sample(&self, from: &Point, ignored: &Box<Object>) -> Option<(Vector, Scalar)> {
@@ -62,7 +49,7 @@ impl Scene {
 
         let chosen_one = rand::thread_rng().choose(&important_objects[..])?;
 
-        let direction = unsafe { (**chosen_one).random_to_object(from) };
+        let direction = from.coords - unsafe { (**chosen_one).random_in_object() };
 
         let mut pdf_sum = 0.;
         self.objects.visit(&mut ImportantObjectPDFSum {

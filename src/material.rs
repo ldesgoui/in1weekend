@@ -6,7 +6,7 @@ pub trait Material {
         _ray: &Ray,
         _intersection: &RayIntersection,
         _importance_sample: &Option<(Vector, Scalar)>,
-    ) -> Option<(Ray, Color)> {
+    ) -> Option<(Ray, Color, Scalar)> {
         None
     }
 
@@ -28,19 +28,50 @@ impl<T: Texture> Material for Lambertian<T> {
         &self,
         ray: &Ray,
         intersection: &RayIntersection,
-        _importance_sample: &Option<(Vector, Scalar)>,
-    ) -> Option<(Ray, Color)> {
-        let target = intersection.point(&ray) + intersection.normal + Vector::random_in_sphere();
-        let origin = intersection.point_nudged_out(&ray);
+        importance_sample: &Option<(Vector, Scalar)>,
+    ) -> Option<(Ray, Color, Scalar)> {
+        let (direction, pdf_value) = if let Some((important_direction, important_pdf)) =
+            importance_sample
+        {
+            if false && rand::random() {
+                let cosine_pdf =
+                    intersection.normal.dot(&important_direction).max(0.) / std::f32::consts::PI;
+                (*important_direction, (important_pdf + cosine_pdf) / 2.)
+            } else {
+                let rotation = na::Rotation3::rotation_between(&Vector::z(), &intersection.normal)
+                    .unwrap_or(na::Rotation3::new(Vector::x() * std::f32::consts::PI));
+                let direction = rotation * random_cosine_direction();
+                (direction, 0.5)
+            }
+        } else {
+            let rotation = na::Rotation3::rotation_between(&Vector::z(), &intersection.normal)
+                .unwrap_or(na::Rotation3::new(Vector::x() * std::f32::consts::PI));
+            let direction = rotation * random_cosine_direction();
+            let pdf_value = 1.;
+            (direction, 1.)
+        };
 
         Some((
             Ray {
-                origin: origin,
-                dir: target - origin,
+                origin: intersection.point_nudged_out(&ray),
+                dir: direction,
             },
             self.albedo.sample(&ray, &intersection),
+            pdf_value,
         ))
     }
+}
+
+fn random_cosine_direction() -> Vector {
+    let r1: Scalar = rand::random();
+    let r2: Scalar = rand::random();
+    let z = (1. - r2).sqrt();
+    let phi = 2. * std::f32::consts::PI * r1;
+    let (s, c) = phi.sin_cos();
+    let r2 = r2.sqrt();
+    let x = c * 2. * r2;
+    let y = s * 2. * r2;
+    Vector::new(x, y, z).normalize()
 }
 
 pub struct Metal<T: Texture> {
@@ -54,7 +85,7 @@ impl<T: Texture> Material for Metal<T> {
         ray: &Ray,
         intersection: &RayIntersection,
         _importance_sample: &Option<(Vector, Scalar)>,
-    ) -> Option<(Ray, Color)> {
+    ) -> Option<(Ray, Color, Scalar)> {
         let reflected = ray.dir.normalize().reflect(&intersection.normal);
 
         if reflected.dot(&intersection.normal) <= 0. {
@@ -67,6 +98,7 @@ impl<T: Texture> Material for Metal<T> {
                 dir: reflected + self.fuzz * Vector::random_in_sphere(),
             },
             self.albedo.sample(&ray, &intersection),
+            1.,
         ))
     }
 }
@@ -82,7 +114,7 @@ impl<T: Texture> Material for Dielectric<T> {
         ray: &Ray,
         intersection: &RayIntersection,
         _importance_sample: &Option<(Vector, Scalar)>,
-    ) -> Option<(Ray, Color)> {
+    ) -> Option<(Ray, Color, Scalar)> {
         let rdotn = ray.dir.dot(&intersection.normal);
 
         let (outward_normal, ni_over_nt, cosine) = if rdotn > 0. {
@@ -102,6 +134,7 @@ impl<T: Texture> Material for Dielectric<T> {
                         dir: refracted,
                     },
                     self.attenuation.sample(&ray, &intersection),
+                    1.,
                 ));
             }
         }
@@ -112,6 +145,7 @@ impl<T: Texture> Material for Dielectric<T> {
                 dir: ray.dir.reflect(&intersection.normal),
             },
             self.attenuation.sample(&ray, &intersection),
+            1.,
         ))
     }
 
@@ -144,13 +178,14 @@ impl<T: Texture> Material for Isotropic<T> {
         ray: &Ray,
         intersection: &RayIntersection,
         _importance_sample: &Option<(Vector, Scalar)>,
-    ) -> Option<(Ray, Color)> {
+    ) -> Option<(Ray, Color, Scalar)> {
         Some((
             Ray {
                 origin: intersection.point_nudged_out(&ray),
                 dir: Vector::random_on_sphere(),
             },
             self.albedo.sample(&ray, &intersection),
+            1.,
         ))
     }
 }
