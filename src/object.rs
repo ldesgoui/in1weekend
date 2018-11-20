@@ -9,16 +9,8 @@ use crate::prelude::*;
 pub trait Object: Send + Sync {
     fn aabb(&self) -> AABB;
     fn ray_cast(&self, ray: &Ray) -> Option<RayIntersection>;
-    fn random_to_object(&self, from: &Point) -> Vector;
-    fn pdf_value(&self, ray: &Ray, intersection: &RayIntersection) -> Scalar;
-    fn material_scatter(
-        &self,
-        ray: &Ray,
-        intersection: &RayIntersection,
-        importance_sample: &Option<(Vector, Scalar)>,
-    ) -> Option<(Ray, Color)>;
+    fn material_scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, Color)>;
     fn material_emitted(&self, ray: &Ray, intersection: &RayIntersection) -> Color;
-    fn important(&self) -> bool;
 }
 
 pub struct ObjectInner<M, S>
@@ -46,30 +38,11 @@ where
             .toi_and_normal_and_uv_with_ray(&self.transform, ray, false)
     }
 
-    fn random_to_object(&self, from: &Point) -> Vector {
-        // TODO
-        Vector::new(0., 0., 0.)
-    }
-
-    fn pdf_value(&self, _ray: &Ray, _intersection: &RayIntersection) -> Scalar {
-        // TODO
-        0.
-    }
-
-    fn material_scatter(
-        &self,
-        ray: &Ray,
-        intersection: &RayIntersection,
-        importance_sample: &Option<(Vector, Scalar)>,
-    ) -> Option<(Ray, Color)> {
-        self.material.scatter(ray, intersection, importance_sample)
+    fn material_scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, Color)> {
+        self.material.scatter(ray, intersection)
     }
 
     fn material_emitted(&self, ray: &Ray, intersection: &RayIntersection) -> Color {
         self.material.emitted(ray, intersection)
-    }
-
-    fn important(&self) -> bool {
-        self.material.important()
     }
 }

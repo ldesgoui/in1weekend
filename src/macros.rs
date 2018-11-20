@@ -17,9 +17,6 @@ macro_rules! mkScene {
         background: [ $( $color:expr ),* ],
         objects: [ $( $object:tt ),* ],
     } => {
-        #[allow(unused_imports)]
-        use nc::shape::Shape;
-
         Scene {
             background: palette::gradient::Gradient::new(vec![ $( $color ),* ]),
             objects: BVT::new_balanced(vec![ $( mkObject!($object) ),* ]),
@@ -27,6 +24,7 @@ macro_rules! mkScene {
     };
 }
 
+#[macro_export]
 macro_rules! mkObject {
     {{
         shape: $shape:expr,

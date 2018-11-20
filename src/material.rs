@@ -1,21 +1,12 @@
 use crate::prelude::*;
 
 pub trait Material {
-    fn scatter(
-        &self,
-        _ray: &Ray,
-        _intersection: &RayIntersection,
-        _importance_sample: &Option<(Vector, Scalar)>,
-    ) -> Option<(Ray, Color)> {
+    fn scatter(&self, _ray: &Ray, _intersection: &RayIntersection) -> Option<(Ray, Color)> {
         None
     }
 
     fn emitted(&self, _ray: &Ray, _intersection: &RayIntersection) -> Color {
         Color::default()
-    }
-
-    fn important(&self) -> bool {
-        false
     }
 }
 
@@ -24,12 +15,7 @@ pub struct Lambertian<T: Texture> {
 }
 
 impl<T: Texture> Material for Lambertian<T> {
-    fn scatter(
-        &self,
-        ray: &Ray,
-        intersection: &RayIntersection,
-        _importance_sample: &Option<(Vector, Scalar)>,
-    ) -> Option<(Ray, Color)> {
+    fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, Color)> {
         let target = intersection.point(&ray) + intersection.normal + Vector::random_in_sphere();
         let origin = intersection.point_nudged_out(&ray);
 
@@ -49,12 +35,7 @@ pub struct Metal<T: Texture> {
 }
 
 impl<T: Texture> Material for Metal<T> {
-    fn scatter(
-        &self,
-        ray: &Ray,
-        intersection: &RayIntersection,
-        _importance_sample: &Option<(Vector, Scalar)>,
-    ) -> Option<(Ray, Color)> {
+    fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, Color)> {
         let reflected = ray.dir.normalize().reflect(&intersection.normal);
 
         if reflected.dot(&intersection.normal) <= 0. {
@@ -77,12 +58,7 @@ pub struct Dielectric<T: Texture> {
 }
 
 impl<T: Texture> Material for Dielectric<T> {
-    fn scatter(
-        &self,
-        ray: &Ray,
-        intersection: &RayIntersection,
-        _importance_sample: &Option<(Vector, Scalar)>,
-    ) -> Option<(Ray, Color)> {
+    fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, Color)> {
         let rdotn = ray.dir.dot(&intersection.normal);
 
         let (outward_normal, ni_over_nt, cosine) = if rdotn > 0. {
@@ -114,10 +90,6 @@ impl<T: Texture> Material for Dielectric<T> {
             self.attenuation.sample(&ray, &intersection),
         ))
     }
-
-    fn important(&self) -> bool {
-        true
-    }
 }
 
 pub struct DiffuseLight<T: Texture> {
@@ -128,10 +100,6 @@ impl<T: Texture> Material for DiffuseLight<T> {
     fn emitted(&self, ray: &Ray, intersection: &RayIntersection) -> Color {
         self.value.sample(ray, intersection)
     }
-
-    fn important(&self) -> bool {
-        true
-    }
 }
 
 pub struct Isotropic<T: Texture> {
@@ -139,12 +107,7 @@ pub struct Isotropic<T: Texture> {
 }
 
 impl<T: Texture> Material for Isotropic<T> {
-    fn scatter(
-        &self,
-        ray: &Ray,
-        intersection: &RayIntersection,
-        _importance_sample: &Option<(Vector, Scalar)>,
-    ) -> Option<(Ray, Color)> {
+    fn scatter(&self, ray: &Ray, intersection: &RayIntersection) -> Option<(Ray, Color)> {
         Some((
             Ray {
                 origin: intersection.point_nudged_out(&ray),

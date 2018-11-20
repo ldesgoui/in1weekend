@@ -1,3 +1,3 @@
 pub mod cornell;
-pub mod default;
-pub mod empty;
+pub mod cover1;
+pub mod cover2;

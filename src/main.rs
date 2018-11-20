@@ -8,15 +8,16 @@ fn main() -> Result<(), failure::Error> {
         .arg(
             clap::Arg::with_name("PRESET")
                 .multiple(true)
-                .default_value("default"),
+                .default_value("cornell"),
         )
         .get_matches();
 
     for preset in matches.values_of("PRESET").expect("no preset") {
         match preset {
             "cornell" => preset!(cornell),
-            "default" => preset!(default),
-            "empty" => preset!(empty),
+            "cover1" => preset!(cover1),
+            "cover2" => preset!(cover2),
+            // "presentation" => preset!(presentation),
             _ => {
                 println!("preset not found: {:?}", preset);
             }

@@ -2,6 +2,9 @@
 #![feature(duration_as_u128)]
 #![feature(extern_crate_item_prelude)]
 
+#[macro_use]
+pub mod macros;
+
 pub extern crate image;
 pub extern crate indicatif;
 pub extern crate nalgebra as na;
@@ -12,8 +15,6 @@ pub extern crate rand;
 pub extern crate rayon;
 
 pub mod camera;
-#[macro_use]
-pub mod macros;
 pub mod material;
 pub mod object;
 pub mod presets;
