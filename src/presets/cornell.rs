@@ -9,8 +9,8 @@ pub fn camera() -> Camera {
         0.,
         None,
         1. / 500.,
-        na::Vector2::new(500, 500),
-        1000,
+        na::Vector2::new(200, 200),
+        200,
     )
 }
 

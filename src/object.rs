@@ -16,7 +16,7 @@ pub trait Object: Send + Sync {
         ray: &Ray,
         intersection: &RayIntersection,
         importance_sample: &Option<(Vector, Scalar)>,
-    ) -> Option<(Ray, Color, Scalar)>;
+    ) -> Option<(Ray, Color)>;
     fn material_emitted(&self, ray: &Ray, intersection: &RayIntersection) -> Color;
     fn important(&self) -> bool;
 }
@@ -58,7 +58,7 @@ where
         ray: &Ray,
         intersection: &RayIntersection,
         importance_sample: &Option<(Vector, Scalar)>,
-    ) -> Option<(Ray, Color, Scalar)> {
+    ) -> Option<(Ray, Color)> {
         self.material.scatter(ray, intersection, importance_sample)
     }
 

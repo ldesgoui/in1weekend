@@ -27,11 +27,11 @@ impl Scene {
                 match object.material_scatter(
                     &ray,
                     &intersection,
-                    &self.importance_sample(&intersection.point_nudged_out(&ray), &object),
+                    &None, //&self.importance_sample(&intersection.point_nudged_out(&ray), &object),
                 ) {
                     None => emitted,
-                    Some((scattered, attenuation, pdf_value)) => {
-                        emitted + attenuation * self.trace(&scattered, iter + 1) / pdf_value
+                    Some((scattered, attenuation)) => {
+                        emitted + attenuation * self.trace(&scattered, iter + 1)
                     }
                 }
             }

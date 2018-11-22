@@ -24,13 +24,11 @@ impl Shape for nc::shape::Ball<Scalar> {
 
 impl Shape for nc::shape::Cuboid<Scalar> {
     fn random_in_object(&self, m: &Isometry) -> Vector {
-        unreachable!()
-        // m * Vector::random_in_sphere()
+        m * self.half_extents().component_mul(&rand::random::<Vector>()) * 2.
     }
 
     fn pdf_value(&self, _m: &Isometry, _ray: &Ray, _intersection: &RayIntersection) -> Scalar {
-        unreachable!()
-        //A1.
+        1.
     }
 }
 
