@@ -13,7 +13,7 @@ nalgebra = "0.16"
 ncollide3d = "0.17"
 noise = "0.5"
 palette = "0.4"
-rand = "0.5"
+rand = "0.7"
 rayon = "1"
 
 [profile.dev]
